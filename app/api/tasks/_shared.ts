@@ -1,4 +1,3 @@
-import { TaskStatus, WorkspaceRole } from '@prisma/client';
 import { auth, currentUser } from '@clerk/nextjs/server';
 import { db } from '../../../lib/db';
 
@@ -34,11 +33,11 @@ export async function getUserWorkspaceContext() {
         userId: user.id,
       },
     },
-    update: { role: WorkspaceRole.OWNER },
+    update: { role: 'OWNER' },
     create: {
       workspaceId: workspace.id,
       userId: user.id,
-      role: WorkspaceRole.OWNER,
+      role: 'OWNER',
     },
   });
 
@@ -46,6 +45,6 @@ export async function getUserWorkspaceContext() {
 }
 
 export function mapUiStatusToPrisma(status: 'active' | 'archived' | 'deleted') {
-  if (status === 'active') return TaskStatus.ACTIVE;
-  return TaskStatus.ARCHIVED;
+  if (status === 'active') return 'ACTIVE';
+  return 'ARCHIVED';
 }

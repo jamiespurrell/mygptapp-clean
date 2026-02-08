@@ -69,6 +69,7 @@ model Task {
   id            String       @id @default(uuid())
   workspaceId   String       @map("workspace_id")
   createdById   String       @map("created_by_user_id")
+  sourceVoiceNoteId String?  @map("source_voice_note_id")
 
   title         String
   notes         String?
@@ -88,6 +89,7 @@ model Task {
 
   @@index([workspaceId])
   @@index([createdById])
+  @@unique([workspaceId, sourceVoiceNoteId])
   @@map("tasks")
 }
 
@@ -105,4 +107,3 @@ model TaskCompletion {
   @@index([userId, completedOn])
   @@map("task_completions")
 }
-

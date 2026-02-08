@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { db } from '../../../../../lib/db';
 import { getUserWorkspaceContext, mapUiStatusToPrisma } from '../../_shared';
 
-type Params = { params: { id: string } };
+type Params = { params: Promise<{ id: string }> };
 
 export async function PATCH(request: Request, { params }: Params) {
   try {
@@ -11,7 +11,7 @@ export async function PATCH(request: Request, { params }: Params) {
       return NextResponse.json({ error: context.error }, { status: 401 });
     }
 
-    const { id } = params;
+    const { id } = await params;
     const body = (await request.json()) as { status?: 'active' | 'archived' | 'deleted' };
 
     if (!body.status || !['active', 'archived', 'deleted'].includes(body.status)) {
