@@ -1,0 +1,108 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum MemberRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum TaskStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+model User {
+  id           String             @id @default(uuid())
+  email        String             @unique
+  name         String?
+  passwordHash String?            @map("password_hash")
+  createdAt    DateTime           @default(now()) @map("created_at")
+  updatedAt    DateTime           @updatedAt @map("updated_at")
+
+  memberships  WorkspaceMember[]
+  tasksCreated Task[]             @relation("TasksCreated")
+  completions  TaskCompletion[]
+
+  @@map("users")
+}
+
+model Workspace {
+  id        String            @id @default(uuid())
+  name      String   	      @unique
+  createdAt DateTime          @default(now()) @map("created_at")
+  updatedAt DateTime          @updatedAt @map("updated_at")
+
+  members   WorkspaceMember[]
+  tasks     Task[]
+
+  @@map("workspaces")
+}
+
+model WorkspaceMember {
+  id          String     @id @default(uuid())
+  workspaceId String     @map("workspace_id")
+  userId      String     @map("user_id")
+  role        MemberRole @default(MEMBER)
+  createdAt   DateTime   @default(now()) @map("created_at")
+
+  workspace   Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@index([userId])
+  @@map("workspace_members")
+}
+
+model Task {
+  id            String       @id @default(uuid())
+  workspaceId   String       @map("workspace_id")
+  createdById   String       @map("created_by_user_id")
+
+  title         String
+  notes         String?
+  status        TaskStatus   @default(ACTIVE)
+  priority      Int          @default(1)
+  dueDate       DateTime?    @map("due_date") @db.Date
+  dueTime       DateTime?    @map("due_time") @db.Time(0)
+  timezone      String?
+  sortOrder     Int          @default(0) @map("sort_order")
+
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+
+  workspace     Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy     User         @relation("TasksCreated", fields: [createdById], references: [id])
+  completions   TaskCompletion[]
+
+  @@index([workspaceId])
+  @@index([createdById])
+  @@map("tasks")
+}
+
+model TaskCompletion {
+  id          String   @id @default(uuid())
+  taskId      String   @map("task_id")
+  userId      String   @map("user_id")
+  completedOn DateTime @map("completed_on") @db.Date
+  completedAt DateTime @default(now()) @map("completed_at")
+
+  task        Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, userId, completedOn])
+  @@index([userId, completedOn])
+  @@map("task_completions")
+}
+

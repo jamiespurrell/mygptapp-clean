@@ -1,0 +1,9 @@
+node_modules
+.next
+out
+.env*
+!.env.local.example
+npm-debug.log*
+
+# clerk configuration (can include secrets)
+/.clerk/
