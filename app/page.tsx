@@ -222,7 +222,7 @@ export default function HomePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: taskTitle.trim(),
-          details: taskDetails.trim(),
+          notes: taskDetails.trim(),
           dueDate: taskDue || null,
           urgency: Number(taskUrgency),
         }),
