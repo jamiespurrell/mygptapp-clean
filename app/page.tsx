@@ -62,6 +62,7 @@ export default function HomePage() {
   const [taskDateDialogOpen, setTaskDateDialogOpen] = useState(false);
   const [taskDateDraftFrom, setTaskDateDraftFrom] = useState('');
   const [taskDateDraftTo, setTaskDateDraftTo] = useState('');
+  const [taskErrorMessage, setTaskErrorMessage] = useState('');
 
   const [noteTitle, setNoteTitle] = useState('');
   const [noteInput, setNoteInput] = useState('');
@@ -85,10 +86,12 @@ export default function HomePage() {
   const fetchTasks = useCallback(async () => {
     if (!user?.primaryEmailAddress?.emailAddress) {
       setTasks([]);
+      setTaskErrorMessage('');
       return;
     }
 
     try {
+      setTaskErrorMessage('');
       const response = await fetch('/api/tasks', { cache: 'no-store' });
       if (!response.ok) throw new Error('Failed to fetch tasks');
 
@@ -120,6 +123,7 @@ export default function HomePage() {
       );
     } catch (error) {
       console.error('Failed loading tasks', error);
+      setTaskErrorMessage('Failed to load tasks');
     }
   }, [user?.primaryEmailAddress?.emailAddress]);
 
@@ -217,6 +221,7 @@ export default function HomePage() {
     if (!taskTitle.trim()) return;
 
     try {
+      setTaskErrorMessage('');
       const response = await fetch('/api/tasks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -237,6 +242,7 @@ export default function HomePage() {
       await fetchTasks();
     } catch (error) {
       console.error('Failed saving task', error);
+      setTaskErrorMessage('Failed to add task');
     }
   }
 
@@ -521,6 +527,7 @@ export default function HomePage() {
             )}
 
             <ul className="task-list">
+              {taskErrorMessage && <li className="empty-item">{taskErrorMessage}</li>}
               {pagedTasks.length ? (
                 pagedTasks.map((task) => {
                   const priority = task.score >= 120 ? 'High' : task.score >= 70 ? 'Medium' : 'Low';
