@@ -62,6 +62,7 @@ export async function GET() {
       select: {
         id: true,
         title: true,
+        notes: true,
         status: true,
         createdAt: true,
       },
@@ -81,11 +82,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: context.error }, { status: 401 });
     }
 
-    const body = (await request.json()) as { title?: string };
+    const body = (await request.json()) as { title?: string; notes?: string; details?: string };
     const title = body.title?.trim();
+    const notes = (body.notes ?? body.details)?.trim();
 
     if (!title) {
       return NextResponse.json({ error: 'title is required' }, { status: 400 });
+    }
+
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('POST /api/tasks payload keys', Object.keys(body));
     }
 
     const task = await db.task.create({
@@ -93,10 +99,12 @@ export async function POST(request: Request) {
         workspaceId: context.workspace.id,
         createdById: context.user.id,
         title,
+        notes: notes || null,
       },
       select: {
         id: true,
         title: true,
+        notes: true,
         status: true,
         createdAt: true,
       },

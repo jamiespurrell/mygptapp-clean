@@ -5,12 +5,14 @@ import { FormEvent, useEffect, useState } from 'react';
 type Task = {
   id: string;
   title: string;
+  notes: string | null;
   status: 'ACTIVE' | 'ARCHIVED';
   createdAt: string;
 };
 
 export default function TasksTestPage() {
   const [title, setTitle] = useState('');
+  const [notes, setNotes] = useState('');
   const [tasks, setTasks] = useState<Task[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -49,7 +51,7 @@ export default function TasksTestPage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ title: trimmedTitle }),
+        body: JSON.stringify({ title: trimmedTitle, notes: notes.trim() || undefined }),
       });
 
       if (!response.ok) {
@@ -58,6 +60,7 @@ export default function TasksTestPage() {
       }
 
       setTitle('');
+      setNotes('');
       await loadTasks();
     } catch {
       setError('Failed to add task.');
@@ -70,17 +73,25 @@ export default function TasksTestPage() {
     <main style={{ margin: '2rem auto', maxWidth: 640, padding: '0 1rem' }}>
       <h1>Tasks API Test</h1>
 
-      <form onSubmit={handleAddTask} style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+      <form onSubmit={handleAddTask} style={{ display: 'grid', gap: '0.5rem', marginBottom: '1rem' }}>
         <input
           type="text"
           placeholder="Task title"
           value={title}
           onChange={(event) => setTitle(event.target.value)}
           disabled={isSaving}
-          style={{ flex: 1, padding: '0.5rem' }}
+          style={{ width: '100%', padding: '0.5rem' }}
+        />
+        <textarea
+          placeholder="Notes (optional)"
+          value={notes}
+          onChange={(event) => setNotes(event.target.value)}
+          disabled={isSaving}
+          rows={3}
+          style={{ width: '100%', padding: '0.5rem', marginBottom: '0.5rem' }}
         />
         <button type="submit" disabled={isSaving || !title.trim()}>
-          {isSaving ? 'Adding...' : 'Add'}
+          {isSaving ? 'Adding...' : 'Add Task'}
         </button>
       </form>
 
@@ -89,7 +100,8 @@ export default function TasksTestPage() {
       <ul>
         {tasks.map((task) => (
           <li key={task.id}>
-            {task.title} <small>({new Date(task.createdAt).toLocaleString()})</small>
+            <div>{task.title} <small>({new Date(task.createdAt).toLocaleString()})</small></div>
+            {task.notes ? <div style={{ color: '#555' }}>{task.notes}</div> : null}
           </li>
         ))}
       </ul>
