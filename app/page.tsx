@@ -14,6 +14,7 @@ type Task = {
   score: number;
   createdAt: string;
   status: ItemStatus;
+  sourceVoiceNoteId: string | null;
 };
 
 type Note = {
@@ -23,6 +24,7 @@ type Note = {
   createdAt: string;
   noteType: string;
   status: ItemStatus;
+  linkedTaskId?: string | null;
 };
 
 function inDateRange(value: string, from: string, to: string) {
@@ -63,6 +65,8 @@ export default function HomePage() {
   const [taskDateDraftFrom, setTaskDateDraftFrom] = useState('');
   const [taskDateDraftTo, setTaskDateDraftTo] = useState('');
   const [taskErrorMessage, setTaskErrorMessage] = useState('');
+  const [noteActionMessage, setNoteActionMessage] = useState('');
+  const [creatingTaskNoteIds, setCreatingTaskNoteIds] = useState<string[]>([]);
 
   const [noteTitle, setNoteTitle] = useState('');
   const [noteInput, setNoteInput] = useState('');
@@ -103,6 +107,7 @@ export default function HomePage() {
           dueDate: string | null;
           priority: number;
           status: 'ACTIVE' | 'ARCHIVED';
+          sourceVoiceNoteId: string | null;
           createdAt: string;
         }>;
       };
@@ -118,6 +123,7 @@ export default function HomePage() {
             score: computePriorityScore(task.dueDate || '', Number(task.priority) || 2),
             createdAt: task.createdAt,
             status: (task.status === 'ACTIVE' ? 'active' : 'archived') as ItemStatus,
+            sourceVoiceNoteId: task.sourceVoiceNoteId,
           }))
           .sort((a, b) => b.score - a.score),
       );
@@ -134,7 +140,14 @@ export default function HomePage() {
     }
 
     const storedNotes = JSON.parse(localStorage.getItem(noteStorageKey) || '[]') as Note[];
-    setNotes(storedNotes.map((note) => ({ ...note, status: note.status || 'active', noteType: note.noteType || 'Voice note' })));
+    setNotes(
+      storedNotes.map((note) => ({
+        ...note,
+        status: note.status || 'active',
+        noteType: note.noteType || 'Voice note',
+        linkedTaskId: note.linkedTaskId || null,
+      })),
+    );
   }, [noteStorageKey]);
 
   useEffect(() => {
@@ -150,6 +163,26 @@ export default function HomePage() {
     if (!noteStorageKey) return;
     localStorage.setItem(noteStorageKey, JSON.stringify(notes));
   }, [notes, noteStorageKey]);
+
+  useEffect(() => {
+    if (!tasks.length) return;
+
+    setNotes((prev) => {
+      let changed = false;
+      const next = prev.map((note) => {
+        const matchingTask = tasks.find((task) => task.sourceVoiceNoteId === note.id);
+        const linkedTaskId = matchingTask?.id || null;
+        if ((note.linkedTaskId || null) === linkedTaskId) {
+          return note;
+        }
+
+        changed = true;
+        return { ...note, linkedTaskId };
+      });
+
+      return changed ? next : prev;
+    });
+  }, [tasks]);
 
   useEffect(() => setNotesPage(1), [notesTab, notesPageSize, noteFromDate, noteToDate]);
   useEffect(() => setTaskPage(1), [taskTab, taskPageSize, taskFromDate, taskToDate]);
@@ -229,7 +262,7 @@ export default function HomePage() {
           title: taskTitle.trim(),
           notes: taskDetails.trim(),
           dueDate: taskDue || null,
-          urgency: Number(taskUrgency),
+          priority: Number(taskUrgency),
         }),
       });
 
@@ -267,15 +300,51 @@ export default function HomePage() {
     setNoteType('Text note (no recording required)');
   }
 
-  function createTaskFromNote(note: Note) {
+  async function createTaskFromNote(note: Note) {
+    if (note.linkedTaskId || creatingTaskNoteIds.includes(note.id)) return;
+
     const noteContext = note.content.trim() || 'No note text';
     const source = `From ${note.noteType} captured ${new Date(note.createdAt).toLocaleString()}`;
 
-    setTaskTitle(note.title.trim() || 'Follow-up task');
-    setTaskDetails(`${noteContext}\n\n${source}`);
-    setTaskTab('active');
-    setTaskPage(1);
+    setCreatingTaskNoteIds((prev) => [...prev, note.id]);
+    setNoteActionMessage('');
+
+    try {
+      const response = await fetch('/api/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: note.title.trim() || 'Follow-up task',
+          notes: `${noteContext}\n\n${source}`,
+          priority: Number(taskUrgency),
+          sourceVoiceNoteId: note.id,
+        }),
+      });
+
+      const payload = (await response.json()) as { error?: string; existingTaskId?: string; task?: { id: string } };
+
+      if (response.status === 409) {
+        setNotes((prev) => prev.map((item) => (item.id === note.id ? { ...item, linkedTaskId: payload.existingTaskId || 'existing-task' } : item)));
+        setNoteActionMessage('A task already exists for this voice note.');
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(payload.error || 'Failed to create task from voice note');
+      }
+
+      setNotes((prev) => prev.map((item) => (item.id === note.id ? { ...item, linkedTaskId: payload.task?.id || 'created-task' } : item)));
+      setTaskTab('active');
+      setTaskPage(1);
+      await fetchTasks();
+    } catch (error) {
+      console.error('Failed creating task from note', error);
+      setNoteActionMessage('Failed to create task from voice note.');
+    } finally {
+      setCreatingTaskNoteIds((prev) => prev.filter((id) => id !== note.id));
+    }
   }
+
 
 
   function addTaskToCalendar(task: Task) {
@@ -441,7 +510,15 @@ export default function HomePage() {
                     <br />
                     <small>{note.content || 'No note text'} • {note.noteType}</small>
                     <div className="item-actions">
-                      {notesTab === 'active' && <button className="mini-btn mini-primary" onClick={() => createTaskFromNote(note)}>Create Task</button>}
+                      {notesTab === 'active' && (
+                        <button
+                          className="mini-btn mini-primary"
+                          onClick={() => createTaskFromNote(note)}
+                          disabled={Boolean(note.linkedTaskId) || creatingTaskNoteIds.includes(note.id)}
+                        >
+                          {note.linkedTaskId ? 'Task Created' : creatingTaskNoteIds.includes(note.id) ? 'Creating...' : 'Create Task'}
+                        </button>
+                      )}
                       {notesTab !== 'active' && <button className="mini-btn" onClick={() => updateNoteStatus(note.id, 'active')}>Activate</button>}
                       {notesTab !== 'archived' && <button className="mini-btn" onClick={() => updateNoteStatus(note.id, 'archived')}>Archive</button>}
                       {notesTab !== 'deleted' && <button className="mini-btn mini-danger" onClick={() => updateNoteStatus(note.id, 'deleted')}>Delete</button>}
@@ -452,6 +529,8 @@ export default function HomePage() {
                 'No voice notes yet. Start recording to capture one!'
               )}
             </div>
+
+            {noteActionMessage && <p className="status">{noteActionMessage}</p>}
 
             <div className="pagination-row">
               <button className="mini-btn" disabled={notesPage === 1} onClick={() => setNotesPage((prev) => Math.max(1, prev - 1))}>Prev</button>
@@ -530,7 +609,7 @@ export default function HomePage() {
               {taskErrorMessage && <li className="empty-item">{taskErrorMessage}</li>}
               {pagedTasks.length ? (
                 pagedTasks.map((task) => {
-                  const priority = task.score >= 120 ? 'High' : task.score >= 70 ? 'Medium' : 'Low';
+                  const priority = task.urgency === 3 ? 'High' : task.urgency === 2 ? 'Medium' : 'Low';
                   return (
                     <li key={task.id} className="task-item">
                       <div>
