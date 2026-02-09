@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { auth, currentUser } from '@clerk/nextjs/server';
 import { db } from '../../../lib/db';
+import { getUserWorkspaceContext } from './_shared';
 
 const VALID_PRIORITIES = new Set([1, 2, 3]);
 
@@ -13,61 +13,53 @@ function parsePriority(value: unknown) {
   return priority;
 }
 
-async function getOrCreateUserWorkspace() {
-  const { userId } = await auth();
-  if (!userId) {
-    return { error: 'Unauthorized' } as const;
-  }
-
-  const clerkUser = await currentUser();
-  const email = clerkUser?.primaryEmailAddress?.emailAddress?.toLowerCase();
-
-  if (!email) {
-    return { error: 'No primary email available' } as const;
-  }
-
-  const user = await db.user.upsert({
-    where: { email },
-    update: {},
-    create: { email },
-  });
-
-  const workspaceName = `${email} Personal Workspace`;
-  const workspace = await db.workspace.upsert({
-    where: { name: workspaceName },
-    update: {},
-    create: { name: workspaceName },
-  });
-
-  await db.workspaceMember.upsert({
-    where: {
-      workspaceId_userId: {
-        workspaceId: workspace.id,
-        userId: user.id,
-      },
-    },
-    update: { role: 'OWNER' },
-    create: {
-      workspaceId: workspace.id,
-      userId: user.id,
-      role: 'OWNER',
-    },
-  });
-
-  return { user, workspace } as const;
+function authErrorStatus(error: unknown) {
+  return error === 'Unauthorized' ? 401 : 500;
 }
 
-export async function GET() {
+
+const STATUS_QUERY_MAP = {
+  active: 'ACTIVE',
+  archived: 'ARCHIVED',
+  deleted: 'DELETED',
+} as const;
+
+function parseStatusFromQuery(request: Request) {
+  const status = new URL(request.url).searchParams.get('status');
+  if (!status) {
+    return { prismaStatus: null } as const;
+  }
+
+  if (status in STATUS_QUERY_MAP) {
+    return { prismaStatus: STATUS_QUERY_MAP[status as keyof typeof STATUS_QUERY_MAP] } as const;
+  }
+
+  return { error: 'Invalid status query value' } as const;
+}
+
+export async function GET(request: Request) {
   try {
-    const context = await getOrCreateUserWorkspace();
+    const context = await getUserWorkspaceContext();
     if ('error' in context) {
-      return NextResponse.json({ error: context.error }, { status: 401 });
+      const status = authErrorStatus(context.error);
+      if (status === 500) {
+        console.error('GET /api/tasks failed to resolve user workspace context', {
+          reason: context.error,
+        });
+      }
+
+      return NextResponse.json({ error: context.error }, { status });
+    }
+
+    const statusFilter = parseStatusFromQuery(request);
+    if ('error' in statusFilter) {
+      return NextResponse.json({ error: statusFilter.error }, { status: 400 });
     }
 
     const tasks = await db.task.findMany({
       where: {
         workspaceId: context.workspace.id,
-        status: 'ACTIVE',
+        ...(statusFilter.prismaStatus ? { status: statusFilter.prismaStatus } : {}),
       },
       orderBy: { createdAt: 'desc' },
       select: {
@@ -96,9 +88,16 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const context = await getOrCreateUserWorkspace();
+    const context = await getUserWorkspaceContext();
     if ('error' in context) {
-      return NextResponse.json({ error: context.error }, { status: 401 });
+      const status = authErrorStatus(context.error);
+      if (status === 500) {
+        console.error('POST /api/tasks failed to resolve user workspace context', {
+          reason: context.error,
+        });
+      }
+
+      return NextResponse.json({ error: context.error }, { status });
     }
 
     const body = (await request.json()) as {

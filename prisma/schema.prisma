@@ -21,6 +21,7 @@ enum MemberRole {
 enum TaskStatus {
   ACTIVE
   ARCHIVED
+  DELETED
 }
 
 model User {

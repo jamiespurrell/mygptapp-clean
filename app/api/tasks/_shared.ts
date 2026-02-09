@@ -46,5 +46,6 @@ export async function getUserWorkspaceContext() {
 
 export function mapUiStatusToPrisma(status: 'active' | 'archived' | 'deleted') {
   if (status === 'active') return 'ACTIVE';
+  if (status === 'deleted') return 'DELETED';
   return 'ARCHIVED';
 }

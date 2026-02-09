@@ -66,7 +66,7 @@ export default function HomePage() {
   const [taskDateDraftTo, setTaskDateDraftTo] = useState('');
   const [taskErrorMessage, setTaskErrorMessage] = useState('');
   const [noteActionMessage, setNoteActionMessage] = useState('');
-  const [creatingTaskNoteIds, setCreatingTaskNoteIds] = useState<string[]>([]);
+  const [pendingTaskSourceNoteId, setPendingTaskSourceNoteId] = useState<string | null>(null);
 
   const [noteTitle, setNoteTitle] = useState('');
   const [noteInput, setNoteInput] = useState('');
@@ -106,7 +106,7 @@ export default function HomePage() {
           notes: string | null;
           dueDate: string | null;
           priority: number;
-          status: 'ACTIVE' | 'ARCHIVED';
+          status: 'ACTIVE' | 'ARCHIVED' | 'DELETED';
           sourceVoiceNoteId: string | null;
           createdAt: string;
         }>;
@@ -122,7 +122,7 @@ export default function HomePage() {
             urgency: Number(task.priority) || 2,
             score: computePriorityScore(task.dueDate || '', Number(task.priority) || 2),
             createdAt: task.createdAt,
-            status: (task.status === 'ACTIVE' ? 'active' : 'archived') as ItemStatus,
+            status: (task.status === 'DELETED' ? 'deleted' : task.status === 'ARCHIVED' ? 'archived' : 'active') as ItemStatus,
             sourceVoiceNoteId: task.sourceVoiceNoteId,
           }))
           .sort((a, b) => b.score - a.score),
@@ -263,11 +263,22 @@ export default function HomePage() {
           notes: taskDetails.trim(),
           dueDate: taskDue || null,
           priority: Number(taskUrgency),
+          sourceVoiceNoteId: pendingTaskSourceNoteId,
         }),
       });
 
-      if (!response.ok) throw new Error('Failed to create task');
+      const payload = (await response.json()) as { task?: { id: string }; error?: string };
+      if (!response.ok) throw new Error(payload.error || 'Failed to create task');
 
+      if (pendingTaskSourceNoteId) {
+        setNotes((prev) =>
+          prev.map((item) =>
+            item.id === pendingTaskSourceNoteId ? { ...item, linkedTaskId: payload.task?.id || 'created-task' } : item,
+          ),
+        );
+      }
+
+      setPendingTaskSourceNoteId(null);
       setTaskTitle('');
       setTaskDetails('');
       setTaskDue('');
@@ -300,49 +311,20 @@ export default function HomePage() {
     setNoteType('Text note (no recording required)');
   }
 
-  async function createTaskFromNote(note: Note) {
-    if (note.linkedTaskId || creatingTaskNoteIds.includes(note.id)) return;
+  function createTaskFromNote(note: Note) {
+    if (note.linkedTaskId) return;
 
     const noteContext = note.content.trim() || 'No note text';
     const source = `From ${note.noteType} captured ${new Date(note.createdAt).toLocaleString()}`;
 
-    setCreatingTaskNoteIds((prev) => [...prev, note.id]);
-    setNoteActionMessage('');
-
-    try {
-      const response = await fetch('/api/tasks', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: note.title.trim() || 'Follow-up task',
-          notes: `${noteContext}\n\n${source}`,
-          priority: Number(taskUrgency),
-          sourceVoiceNoteId: note.id,
-        }),
-      });
-
-      const payload = (await response.json()) as { error?: string; existingTaskId?: string; task?: { id: string } };
-
-      if (response.status === 409) {
-        setNotes((prev) => prev.map((item) => (item.id === note.id ? { ...item, linkedTaskId: payload.existingTaskId || 'existing-task' } : item)));
-        setNoteActionMessage('A task already exists for this voice note.');
-        return;
-      }
-
-      if (!response.ok) {
-        throw new Error(payload.error || 'Failed to create task from voice note');
-      }
-
-      setNotes((prev) => prev.map((item) => (item.id === note.id ? { ...item, linkedTaskId: payload.task?.id || 'created-task' } : item)));
-      setTaskTab('active');
-      setTaskPage(1);
-      await fetchTasks();
-    } catch (error) {
-      console.error('Failed creating task from note', error);
-      setNoteActionMessage('Failed to create task from voice note.');
-    } finally {
-      setCreatingTaskNoteIds((prev) => prev.filter((id) => id !== note.id));
-    }
+    setTaskTitle(note.title.trim() || 'Follow-up task');
+    setTaskDetails(`${noteContext}\n\n${source}`);
+    setPendingTaskSourceNoteId(note.id);
+    setNotes((prev) => prev.map((item) => (item.id === note.id ? { ...item, linkedTaskId: 'copied-to-form' } : item)));
+    setTaskTab('active');
+    setTaskPage(1);
+    setTaskErrorMessage('');
+    setNoteActionMessage('Task details copied to the Daily To-Do form. Click Add Task to save.');
   }
 
 
@@ -379,8 +361,24 @@ export default function HomePage() {
         body: JSON.stringify({ status }),
       });
 
-      if (!response.ok) throw new Error('Failed updating task status');
-      await fetchTasks();
+      const payload = (await response.json()) as {
+        task?: { status: 'ACTIVE' | 'ARCHIVED' | 'DELETED' };
+        error?: string;
+      };
+
+      if (!response.ok) {
+        throw new Error(payload.error || 'Failed updating task status');
+      }
+
+      const nextStatus = payload.task?.status === 'DELETED'
+        ? 'deleted'
+        : payload.task?.status === 'ARCHIVED'
+          ? 'archived'
+          : payload.task?.status === 'ACTIVE'
+            ? 'active'
+            : status;
+
+      setTasks((prev) => prev.map((task) => (task.id === id ? { ...task, status: nextStatus } : task)));
     } catch (error) {
       console.error('Failed updating task status', error);
     }
@@ -514,9 +512,9 @@ export default function HomePage() {
                         <button
                           className="mini-btn mini-primary"
                           onClick={() => createTaskFromNote(note)}
-                          disabled={Boolean(note.linkedTaskId) || creatingTaskNoteIds.includes(note.id)}
+                          disabled={Boolean(note.linkedTaskId)}
                         >
-                          {note.linkedTaskId ? 'Task Created' : creatingTaskNoteIds.includes(note.id) ? 'Creating...' : 'Create Task'}
+                          {note.linkedTaskId ? 'Copied to Form' : 'Create Task'}
                         </button>
                       )}
                       {notesTab !== 'active' && <button className="mini-btn" onClick={() => updateNoteStatus(note.id, 'active')}>Activate</button>}
