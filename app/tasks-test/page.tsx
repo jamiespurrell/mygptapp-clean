@@ -6,7 +6,7 @@ type Task = {
   id: string;
   title: string;
   notes: string | null;
-  status: 'ACTIVE' | 'ARCHIVED';
+  status: 'ACTIVE' | 'ARCHIVED' | 'DELETED';
   createdAt: string;
 };
 

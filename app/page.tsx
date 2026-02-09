@@ -106,7 +106,7 @@ export default function HomePage() {
           notes: string | null;
           dueDate: string | null;
           priority: number;
-          status: 'ACTIVE' | 'ARCHIVED';
+          status: 'ACTIVE' | 'ARCHIVED' | 'DELETED';
           sourceVoiceNoteId: string | null;
           createdAt: string;
         }>;
@@ -122,7 +122,7 @@ export default function HomePage() {
             urgency: Number(task.priority) || 2,
             score: computePriorityScore(task.dueDate || '', Number(task.priority) || 2),
             createdAt: task.createdAt,
-            status: (task.status === 'ACTIVE' ? 'active' : 'archived') as ItemStatus,
+            status: (task.status === 'DELETED' ? 'deleted' : task.status === 'ARCHIVED' ? 'archived' : 'active') as ItemStatus,
             sourceVoiceNoteId: task.sourceVoiceNoteId,
           }))
           .sort((a, b) => b.score - a.score),
@@ -361,8 +361,24 @@ export default function HomePage() {
         body: JSON.stringify({ status }),
       });
 
-      if (!response.ok) throw new Error('Failed updating task status');
-      await fetchTasks();
+      const payload = (await response.json()) as {
+        task?: { status: 'ACTIVE' | 'ARCHIVED' | 'DELETED' };
+        error?: string;
+      };
+
+      if (!response.ok) {
+        throw new Error(payload.error || 'Failed updating task status');
+      }
+
+      const nextStatus = payload.task?.status === 'DELETED'
+        ? 'deleted'
+        : payload.task?.status === 'ARCHIVED'
+          ? 'archived'
+          : payload.task?.status === 'ACTIVE'
+            ? 'active'
+            : status;
+
+      setTasks((prev) => prev.map((task) => (task.id === id ? { ...task, status: nextStatus } : task)));
     } catch (error) {
       console.error('Failed updating task status', error);
     }

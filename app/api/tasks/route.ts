@@ -17,7 +17,27 @@ function authErrorStatus(error: unknown) {
   return error === 'Unauthorized' ? 401 : 500;
 }
 
-export async function GET() {
+
+const STATUS_QUERY_MAP = {
+  active: 'ACTIVE',
+  archived: 'ARCHIVED',
+  deleted: 'DELETED',
+} as const;
+
+function parseStatusFromQuery(request: Request) {
+  const status = new URL(request.url).searchParams.get('status');
+  if (!status) {
+    return { prismaStatus: null } as const;
+  }
+
+  if (status in STATUS_QUERY_MAP) {
+    return { prismaStatus: STATUS_QUERY_MAP[status as keyof typeof STATUS_QUERY_MAP] } as const;
+  }
+
+  return { error: 'Invalid status query value' } as const;
+}
+
+export async function GET(request: Request) {
   try {
     const context = await getUserWorkspaceContext();
     if ('error' in context) {
@@ -31,10 +51,15 @@ export async function GET() {
       return NextResponse.json({ error: context.error }, { status });
     }
 
+    const statusFilter = parseStatusFromQuery(request);
+    if ('error' in statusFilter) {
+      return NextResponse.json({ error: statusFilter.error }, { status: 400 });
+    }
+
     const tasks = await db.task.findMany({
       where: {
         workspaceId: context.workspace.id,
-        status: 'ACTIVE',
+        ...(statusFilter.prismaStatus ? { status: statusFilter.prismaStatus } : {}),
       },
       orderBy: { createdAt: 'desc' },
       select: {
