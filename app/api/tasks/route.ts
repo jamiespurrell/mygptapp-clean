@@ -70,6 +70,7 @@ export async function GET(request: Request) {
         priority: true,
         status: true,
         sourceVoiceNoteId: true,
+        deletedAt: true,
         createdAt: true,
       },
     });
@@ -170,6 +171,7 @@ export async function POST(request: Request) {
         priority: true,
         status: true,
         sourceVoiceNoteId: true,
+        deletedAt: true,
         createdAt: true,
       },
     });
