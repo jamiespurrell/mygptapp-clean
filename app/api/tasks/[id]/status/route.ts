@@ -23,16 +23,28 @@ export async function PATCH(request: Request, { params }: Params) {
         id,
         workspaceId: context.workspace.id,
       },
-      select: { id: true },
+      select: {
+        id: true,
+        status: true,
+      },
     });
 
     if (!existingTask) {
       return NextResponse.json({ error: 'Task not found' }, { status: 404 });
     }
 
+    const nextStatus = mapUiStatusToPrisma(body.status);
     const task = await db.task.update({
       where: { id },
-      data: { status: mapUiStatusToPrisma(body.status) },
+      data: {
+        status: nextStatus,
+        deletedAt:
+          nextStatus === 'DELETED'
+            ? existingTask.status === 'DELETED'
+              ? undefined
+              : new Date()
+            : null,
+      },
       select: {
         id: true,
         title: true,
@@ -40,6 +52,7 @@ export async function PATCH(request: Request, { params }: Params) {
         dueDate: true,
         priority: true,
         status: true,
+        deletedAt: true,
         createdAt: true,
       },
     });
