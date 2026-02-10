@@ -15,6 +15,7 @@ type Task = {
   createdAt: string;
   status: ItemStatus;
   sourceVoiceNoteId: string | null;
+  deletedAt: string | null;
 };
 
 type Note = {
@@ -108,6 +109,7 @@ export default function HomePage() {
           priority: number;
           status: 'ACTIVE' | 'ARCHIVED' | 'DELETED';
           sourceVoiceNoteId: string | null;
+          deletedAt: string | null;
           createdAt: string;
         }>;
       };
@@ -124,6 +126,7 @@ export default function HomePage() {
             createdAt: task.createdAt,
             status: (task.status === 'DELETED' ? 'deleted' : task.status === 'ARCHIVED' ? 'archived' : 'active') as ItemStatus,
             sourceVoiceNoteId: task.sourceVoiceNoteId,
+            deletedAt: task.deletedAt,
           }))
           .sort((a, b) => b.score - a.score),
       );
@@ -362,7 +365,7 @@ export default function HomePage() {
       });
 
       const payload = (await response.json()) as {
-        task?: { status: 'ACTIVE' | 'ARCHIVED' | 'DELETED' };
+        task?: { status: 'ACTIVE' | 'ARCHIVED' | 'DELETED'; deletedAt: string | null };
         error?: string;
       };
 
@@ -378,7 +381,13 @@ export default function HomePage() {
             ? 'active'
             : status;
 
-      setTasks((prev) => prev.map((task) => (task.id === id ? { ...task, status: nextStatus } : task)));
+      setTasks((prev) =>
+        prev.map((task) =>
+          task.id === id
+            ? { ...task, status: nextStatus, deletedAt: payload.task?.deletedAt ?? (nextStatus === 'deleted' ? new Date().toISOString() : null) }
+            : task,
+        ),
+      );
     } catch (error) {
       console.error('Failed updating task status', error);
     }
@@ -614,6 +623,9 @@ export default function HomePage() {
                         <strong>{task.title}</strong>
                         <br />
                         <small>{task.details || 'No details'} • Due: {task.dueDate || 'No date'}</small>
+                        {task.status === 'deleted' && task.deletedAt && (
+                          <small className="status retention-note">Permanently deletes on: {new Date(new Date(task.deletedAt).getTime() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString()}</small>
+                        )}
                       </div>
                       <div className="right-stack">
                         <span className={`priority-pill priority-${priority.toLowerCase()}`}>{priority}</span>
@@ -629,7 +641,7 @@ export default function HomePage() {
                             <div className="task-dropdown">
                               {taskTab !== 'active' && (
                                 <button className="task-dropdown-item" onClick={() => { updateTaskStatus(task.id, 'active'); setTaskMenuOpenId(null); }}>
-                                  Activate
+                                  {taskTab === 'deleted' ? 'Restore' : 'Activate'}
                                 </button>
                               )}
                               {taskTab !== 'archived' && (
@@ -658,7 +670,7 @@ export default function HomePage() {
             </ul>
 
             {taskTab === 'deleted' && (
-              <p className="status retention-note">Deleted tasks are permanently removed 30 days after the task was created.</p>
+              <p className="status retention-note">Deleted tasks are permanently removed 30 days after first deletion.</p>
             )}
 
             <div className="pagination-row">
