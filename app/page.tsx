@@ -24,6 +24,10 @@ type Note = {
   content: string;
   createdAt: string;
   noteType: string;
+  type: 'TEXT' | 'AUDIO';
+  audioUrl: string | null;
+  audioMimeType: string | null;
+  durationMs: number | null;
   status: ItemStatus;
   linkedTaskId?: string | null;
 };
@@ -50,7 +54,6 @@ function inDateRange(value: string, from: string, to: string) {
 
 export default function HomePage() {
   const { user } = useUser();
-  const userId = user?.id;
   const [taskTitle, setTaskTitle] = useState('');
   const [taskDetails, setTaskDetails] = useState('');
   const [taskDue, setTaskDue] = useState('');
@@ -72,7 +75,7 @@ export default function HomePage() {
 
   const [noteTitle, setNoteTitle] = useState('');
   const [noteInput, setNoteInput] = useState('');
-  const [noteType, setNoteType] = useState('Text note (no recording required)');
+  const [noteType, setNoteType] = useState<'TEXT' | 'AUDIO'>('TEXT');
   const [notes, setNotes] = useState<Note[]>([]);
   const [notesTab, setNotesTab] = useState<ItemStatus>('active');
   const [notesPage, setNotesPage] = useState(1);
@@ -82,12 +85,12 @@ export default function HomePage() {
 
   const [recordingStatus, setRecordingStatus] = useState('Ready to record.');
   const [audioUrl, setAudioUrl] = useState('');
+  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
 
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const [isRecording, setIsRecording] = useState(false);
 
-  const noteStorageKey = useMemo(() => (userId ? `voice-note-items:${userId}` : ''), [userId]);
 
   const fetchTasks = useCallback(async () => {
     if (!user?.primaryEmailAddress?.emailAddress) {
@@ -137,22 +140,36 @@ export default function HomePage() {
     }
   }, [user?.primaryEmailAddress?.emailAddress]);
 
-  useEffect(() => {
-    if (!noteStorageKey) {
+  const fetchNotes = useCallback(async () => {
+    if (!user?.id) {
       setNotes([]);
       return;
     }
 
-    const storedNotes = JSON.parse(localStorage.getItem(noteStorageKey) || '[]') as Note[];
-    setNotes(
-      storedNotes.map((note) => ({
-        ...note,
-        status: note.status || 'active',
-        noteType: note.noteType || 'Voice note',
-        linkedTaskId: note.linkedTaskId || null,
-      })),
-    );
-  }, [noteStorageKey]);
+    try {
+      const response = await fetch('/api/voice-notes', { cache: 'no-store' });
+      if (!response.ok) throw new Error('Failed to fetch voice notes');
+
+      const data = (await response.json()) as {
+        notes: Array<{
+          id: string;
+          title: string | null;
+          content: string | null;
+          createdAt: string;
+          noteType: string;
+          type: 'TEXT' | 'AUDIO';
+          audioUrl: string | null;
+          audioMimeType: string | null;
+          durationMs: number | null;
+          status: ItemStatus;
+        }>
+      };
+
+      setNotes(data.notes.map((note) => ({ ...note, title: note.title || 'Untitled Note', content: note.content || '', linkedTaskId: null })));
+    } catch (error) {
+      console.error('Failed loading voice notes', error);
+    }
+  }, [user?.id]);
 
   useEffect(() => {
     if (!user?.primaryEmailAddress?.emailAddress) {
@@ -164,9 +181,8 @@ export default function HomePage() {
   }, [fetchTasks, user?.primaryEmailAddress?.emailAddress]);
 
   useEffect(() => {
-    if (!noteStorageKey) return;
-    localStorage.setItem(noteStorageKey, JSON.stringify(notes));
-  }, [notes, noteStorageKey]);
+    fetchNotes();
+  }, [fetchNotes]);
 
   useEffect(() => {
     if (!tasks.length) return;
@@ -235,7 +251,8 @@ export default function HomePage() {
 
       recorder.ondataavailable = (event) => chunksRef.current.push(event.data);
       recorder.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
+        const blob = new Blob(chunksRef.current, { type: recorder.mimeType || 'audio/webm' });
+        setAudioBlob(blob);
         setAudioUrl(URL.createObjectURL(blob));
         setRecordingStatus('Recording captured! Add a title or notes, then save.');
       };
@@ -294,25 +311,41 @@ export default function HomePage() {
     }
   }
 
-  function saveNote() {
-    if (!noteTitle.trim() && !noteInput.trim()) return;
+  async function saveNote() {
+    if (!noteTitle.trim() && !noteInput.trim() && !audioBlob) return;
 
-    setNotes((prev) => [
-      {
-        id: crypto.randomUUID(),
-        title: noteTitle.trim() || 'Untitled Note',
-        content: noteInput.trim(),
-        createdAt: new Date().toISOString(),
-        noteType,
-        status: 'active',
-      },
-      ...prev,
-    ]);
+    try {
+      const formData = new FormData();
+      formData.append('title', noteTitle.trim());
+      formData.append('content', noteInput.trim());
+      formData.append('type', noteType);
 
-    setNoteTitle('');
-    setNoteInput('');
-    setAudioUrl('');
-    setNoteType('Text note (no recording required)');
+      if (audioBlob) {
+        formData.append('audio', audioBlob, `voice-note-${Date.now()}.webm`);
+      }
+
+      const response = await fetch('/api/voice-notes', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const payload = (await response.json()) as { note?: Note; error?: string };
+      if (!response.ok || !payload.note) {
+        throw new Error(payload.error || 'Failed to save note');
+      }
+
+      const savedNote = payload.note as Note;
+      setNotes((prev) => [{ ...savedNote, linkedTaskId: null }, ...prev]);
+      setNoteTitle('');
+      setNoteInput('');
+      setAudioUrl('');
+      setAudioBlob(null);
+      setNoteType('TEXT');
+      setRecordingStatus('Voice note saved.');
+    } catch (error) {
+      console.error('Failed saving voice note', error);
+      setRecordingStatus('Failed to save voice note.');
+    }
   }
 
   function createTaskFromNote(note: Note) {
@@ -394,8 +427,21 @@ export default function HomePage() {
     }
   }
 
-  function updateNoteStatus(id: string, status: ItemStatus) {
-    setNotes((prev) => prev.map((note) => (note.id === id ? { ...note, status } : note)));
+  async function updateNoteStatus(id: string, status: ItemStatus) {
+    try {
+      const response = await fetch(`/api/voice-notes/${id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+
+      const payload = (await response.json()) as { note?: { status: ItemStatus }; error?: string };
+      if (!response.ok) throw new Error(payload.error || 'Failed updating voice note status');
+
+      await fetchNotes();
+    } catch (error) {
+      console.error('Failed updating voice note status', error);
+    }
   }
 
   const taskCounts = useMemo(
@@ -477,7 +523,7 @@ export default function HomePage() {
               <button className="btn btn-danger" onClick={stopRecording}>Stop Recording</button>
             </div>
             <p className="status">{recordingStatus}</p>
-            <audio controls src={audioUrl} />
+            {audioUrl ? <audio controls src={audioUrl} /> : null}
 
             <label htmlFor="noteTitle">Title</label>
             <input id="noteTitle" value={noteTitle} onChange={(e) => setNoteTitle(e.target.value)} placeholder="Morning planning" />
@@ -486,9 +532,9 @@ export default function HomePage() {
             <textarea id="noteInput" value={noteInput} onChange={(e) => setNoteInput(e.target.value)} placeholder="Context or follow up" rows={4} />
 
             <label htmlFor="noteType">Note type</label>
-            <select id="noteType" value={noteType} onChange={(e) => setNoteType(e.target.value)}>
-              <option value="Voice note">Voice note</option>
-              <option value="Text note (no recording required)">Text note (no recording required)</option>
+            <select id="noteType" value={noteType} onChange={(e) => setNoteType(e.target.value as 'TEXT' | 'AUDIO')}>
+              <option value="AUDIO">Voice note</option>
+              <option value="TEXT">Text note (no recording required)</option>
             </select>
 
             <div className="row stack-mobile">
@@ -499,6 +545,8 @@ export default function HomePage() {
                   setNoteTitle('');
                   setNoteInput('');
                   setAudioUrl('');
+                  setAudioBlob(null);
+                  setNoteType('TEXT');
                   setRecordingStatus('Draft discarded.');
                 }}
               >
@@ -531,6 +579,9 @@ export default function HomePage() {
                     <strong>{note.title}</strong>
                     <br />
                     <small>{note.content || 'No note text'} • {note.noteType}</small>
+                    {note.type === 'AUDIO' ? (
+                      note.audioUrl ? <audio controls src={note.audioUrl} /> : <small className="status">Audio unavailable</small>
+                    ) : null}
                     <div className="item-actions">
                       {notesTab === 'active' && (
                         <button
