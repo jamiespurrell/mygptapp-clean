@@ -85,3 +85,6 @@ textarea { resize: vertical; min-height: 110px; }
   .show-label { text-align: left; }
   .date-dialog-inputs { grid-template-columns: 1fr; }
 }
+
+.note-actions { display: flex; justify-content: space-between; align-items: center; }
+.edit-dialog { width: min(520px, 100%); }

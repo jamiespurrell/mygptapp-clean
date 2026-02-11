@@ -87,6 +87,19 @@ export default function HomePage() {
   const [notesPageSize, setNotesPageSize] = useState(5);
   const [noteFromDate, setNoteFromDate] = useState('');
   const [noteToDate, setNoteToDate] = useState('');
+  const [noteMenuOpenId, setNoteMenuOpenId] = useState<string | null>(null);
+
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [editTaskTitle, setEditTaskTitle] = useState('');
+  const [editTaskDetails, setEditTaskDetails] = useState('');
+  const [editTaskDueDate, setEditTaskDueDate] = useState('');
+  const [editTaskUrgency, setEditTaskUrgency] = useState('2');
+  const [taskEditMessage, setTaskEditMessage] = useState('');
+
+  const [editingNote, setEditingNote] = useState<Note | null>(null);
+  const [editNoteTitle, setEditNoteTitle] = useState('');
+  const [editNoteContent, setEditNoteContent] = useState('');
+  const [noteEditMessage, setNoteEditMessage] = useState('');
 
   const [recordingStatus, setRecordingStatus] = useState('Ready to record.');
   const [audioUrl, setAudioUrl] = useState('');
@@ -218,6 +231,7 @@ export default function HomePage() {
   useEffect(() => setNotesPage(1), [notesTab, notesPageSize, noteFromDate, noteToDate]);
   useEffect(() => setTaskPage(1), [taskTab, taskPageSize, taskFromDate, taskToDate]);
   useEffect(() => setTaskMenuOpenId(null), [taskTab, taskPage, taskFromDate, taskToDate]);
+  useEffect(() => setNoteMenuOpenId(null), [notesTab, notesPage, noteFromDate, noteToDate]);
 
   function openTaskDateDialog() {
     setTaskDateDraftFrom(taskFromDate);
@@ -375,6 +389,135 @@ export default function HomePage() {
     setNoteActionMessage('Task details copied to the Daily To-Do form. Click Add Task to save.');
   }
 
+
+  function openTaskEditModal(task: Task) {
+    setEditingTask(task);
+    setEditTaskTitle(task.title);
+    setEditTaskDetails(task.details);
+    setEditTaskDueDate(task.dueDate || '');
+    setEditTaskUrgency(String(task.urgency || 2));
+    setTaskEditMessage('');
+  }
+
+  function closeTaskEditModal() {
+    setEditingTask(null);
+    setTaskEditMessage('');
+  }
+
+  async function saveTaskEdit() {
+    if (!editingTask || !editTaskTitle.trim()) return;
+
+    try {
+      setTaskEditMessage('');
+      const response = await fetch(`/api/tasks/${editingTask.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: editTaskTitle.trim(),
+          notes: editTaskDetails,
+          dueDate: editTaskDueDate || null,
+          priority: Number(editTaskUrgency),
+        }),
+      });
+
+      const payload = (await response.json()) as {
+        task?: {
+          id: string;
+          title: string;
+          notes: string | null;
+          dueDate: string | null;
+          priority: number;
+        };
+        error?: string;
+      };
+
+      if (!response.ok || !payload.task) {
+        throw new Error(payload.error || 'Failed to save task');
+      }
+
+      setTasks((prev) =>
+        prev
+          .map((task) =>
+            task.id === editingTask.id
+              ? {
+                  ...task,
+                  title: payload.task?.title || task.title,
+                  details: payload.task?.notes || '',
+                  dueDate: payload.task?.dueDate || '',
+                  urgency: Number(payload.task?.priority) || task.urgency,
+                  score: computePriorityScore(payload.task?.dueDate || '', Number(payload.task?.priority) || task.urgency),
+                }
+              : task,
+          )
+          .sort((a, b) => b.score - a.score),
+      );
+
+      closeTaskEditModal();
+    } catch (error) {
+      console.error('Failed updating task', error);
+      setTaskEditMessage('Unable to save task changes.');
+    }
+  }
+
+  function openNoteEditModal(note: Note) {
+    setEditingNote(note);
+    setEditNoteTitle(note.title);
+    setEditNoteContent(note.content || '');
+    setNoteEditMessage('');
+  }
+
+  function closeNoteEditModal() {
+    setEditingNote(null);
+    setNoteEditMessage('');
+  }
+
+  async function saveNoteEdit() {
+    if (!editingNote) return;
+
+    try {
+      setNoteEditMessage('');
+      const response = await fetch(`/api/voice-notes/${editingNote.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: editNoteTitle,
+          content: editNoteContent,
+        }),
+      });
+
+      const payload = (await response.json()) as {
+        note?: {
+          id: string;
+          title: string | null;
+          content: string | null;
+          noteType: string;
+        };
+        error?: string;
+      };
+
+      if (!response.ok || !payload.note) {
+        throw new Error(payload.error || 'Failed to save note');
+      }
+
+      setNotes((prev) =>
+        prev.map((note) =>
+          note.id === editingNote.id
+            ? {
+                ...note,
+                title: payload.note?.title || 'Untitled Note',
+                content: payload.note?.content || '',
+                noteType: payload.note?.noteType || note.noteType,
+              }
+            : note,
+        ),
+      );
+
+      closeNoteEditModal();
+    } catch (error) {
+      console.error('Failed updating voice note', error);
+      setNoteEditMessage('Unable to save note changes.');
+    }
+  }
 
 
   function addTaskToCalendar(task: Task) {
@@ -593,7 +736,7 @@ export default function HomePage() {
                     {note.type === 'AUDIO' ? (
                       note.audioUrl ? <audio controls src={note.audioUrl} /> : <small className="status">Audio unavailable</small>
                     ) : null}
-                    <div className="item-actions">
+                    <div className="item-actions note-actions">
                       {notesTab === 'active' && (
                         <button
                           className="mini-btn mini-primary"
@@ -603,9 +746,25 @@ export default function HomePage() {
                           {note.linkedTaskId ? 'Copied to Form' : 'Create Task'}
                         </button>
                       )}
-                      {notesTab !== 'active' && <button className="mini-btn" onClick={() => updateNoteStatus(note.id, 'active')}>Activate</button>}
-                      {notesTab !== 'archived' && <button className="mini-btn" onClick={() => updateNoteStatus(note.id, 'archived')}>Archive</button>}
-                      {notesTab !== 'deleted' && <button className="mini-btn mini-danger" onClick={() => updateNoteStatus(note.id, 'deleted')}>Delete</button>}
+                      <div className="task-menu-wrap">
+                        <button
+                          className="menu-trigger"
+                          onClick={() => setNoteMenuOpenId((prev) => (prev === note.id ? null : note.id))}
+                          aria-label="Open voice note actions"
+                        >
+                          •••
+                        </button>
+                        {noteMenuOpenId === note.id && (
+                          <div className="task-dropdown">
+                            <button className="task-dropdown-item" onClick={() => { openNoteEditModal(note); setNoteMenuOpenId(null); }}>
+                              Edit
+                            </button>
+                            {notesTab !== 'active' && <button className="task-dropdown-item" onClick={() => { updateNoteStatus(note.id, 'active'); setNoteMenuOpenId(null); }}>Activate</button>}
+                            {notesTab !== 'archived' && <button className="task-dropdown-item" onClick={() => { updateNoteStatus(note.id, 'archived'); setNoteMenuOpenId(null); }}>Archive</button>}
+                            {notesTab !== 'deleted' && <button className="task-dropdown-item task-dropdown-danger" onClick={() => { updateNoteStatus(note.id, 'deleted'); setNoteMenuOpenId(null); }}>Delete</button>}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 ))
@@ -722,6 +881,9 @@ export default function HomePage() {
                           </button>
                           {taskMenuOpenId === task.id && (
                             <div className="task-dropdown">
+                              <button className="task-dropdown-item" onClick={() => { openTaskEditModal(task); setTaskMenuOpenId(null); }}>
+                                Edit
+                              </button>
                               {taskTab !== 'active' && (
                                 <button className="task-dropdown-item" onClick={() => { updateTaskStatus(task.id, 'active'); setTaskMenuOpenId(null); }}>
                                   {taskTab === 'deleted' ? 'Restore' : 'Activate'}
@@ -754,6 +916,57 @@ export default function HomePage() {
 
             {taskTab === 'deleted' && (
               <p className="status retention-note">Deleted tasks are permanently removed 30 days after first deletion.</p>
+            )}
+
+            {editingTask && (
+              <div className="date-dialog-backdrop" role="dialog" aria-modal="true" aria-label="Edit task">
+                <div className="date-dialog edit-dialog">
+                  <h3>Edit task</h3>
+                  <label htmlFor="editTaskTitle">Title</label>
+                  <input id="editTaskTitle" value={editTaskTitle} onChange={(e) => setEditTaskTitle(e.target.value)} />
+
+                  <label htmlFor="editTaskDetails">Details</label>
+                  <textarea id="editTaskDetails" value={editTaskDetails} onChange={(e) => setEditTaskDetails(e.target.value)} rows={4} />
+
+                  <label htmlFor="editTaskUrgency">Priority</label>
+                  <select id="editTaskUrgency" value={editTaskUrgency} onChange={(e) => setEditTaskUrgency(e.target.value)}>
+                    <option value="3">High</option>
+                    <option value="2">Medium</option>
+                    <option value="1">Low</option>
+                  </select>
+
+                  <label htmlFor="editTaskDueDate">Due date</label>
+                  <input id="editTaskDueDate" type="date" value={editTaskDueDate} onChange={(e) => setEditTaskDueDate(e.target.value)} />
+
+                  {taskEditMessage ? <p className="status">{taskEditMessage}</p> : null}
+
+                  <div className="date-dialog-actions">
+                    <button className="mini-btn" onClick={closeTaskEditModal}>Cancel</button>
+                    <button className="btn btn-primary" onClick={saveTaskEdit}>Save</button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {editingNote && (
+              <div className="date-dialog-backdrop" role="dialog" aria-modal="true" aria-label="Edit voice note">
+                <div className="date-dialog edit-dialog">
+                  <h3>Edit voice note</h3>
+
+                  <label htmlFor="editNoteTitle">Title</label>
+                  <input id="editNoteTitle" value={editNoteTitle} onChange={(e) => setEditNoteTitle(e.target.value)} />
+
+                  <label htmlFor="editNoteContent">Notes</label>
+                  <textarea id="editNoteContent" value={editNoteContent} onChange={(e) => setEditNoteContent(e.target.value)} rows={4} />
+
+                  {noteEditMessage ? <p className="status">{noteEditMessage}</p> : null}
+
+                  <div className="date-dialog-actions">
+                    <button className="mini-btn" onClick={closeNoteEditModal}>Cancel</button>
+                    <button className="btn btn-primary" onClick={saveNoteEdit}>Save</button>
+                  </div>
+                </div>
+              </div>
             )}
 
             <div className="pagination-row">
