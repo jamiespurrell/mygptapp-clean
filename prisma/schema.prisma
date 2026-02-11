@@ -24,6 +24,17 @@ enum TaskStatus {
   DELETED
 }
 
+enum VoiceNoteType {
+  TEXT
+  AUDIO
+}
+
+enum VoiceNoteStatus {
+  ACTIVE
+  ARCHIVED
+  DELETED
+}
+
 model User {
   id           String             @id @default(uuid())
   email        String             @unique
@@ -37,6 +48,24 @@ model User {
   completions  TaskCompletion[]
 
   @@map("users")
+}
+
+model VoiceNote {
+  id            String          @id @default(uuid())
+  clerkUserId   String          @map("clerk_user_id")
+  type          VoiceNoteType   @default(TEXT)
+  title         String?
+  content       String?
+  audioUrl      String?         @map("audio_url")
+  audioMimeType String?         @map("audio_mime_type")
+  durationMs    Int?            @map("duration_ms")
+  status        VoiceNoteStatus @default(ACTIVE)
+  deletedAt     DateTime?       @map("deleted_at")
+  createdAt     DateTime        @default(now()) @map("created_at")
+  updatedAt     DateTime        @updatedAt @map("updated_at")
+
+  @@index([clerkUserId, status])
+  @@map("voice_notes")
 }
 
 model Workspace {
