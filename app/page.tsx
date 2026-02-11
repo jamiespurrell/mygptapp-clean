@@ -68,6 +68,7 @@ export default function HomePage() {
   const [taskErrorMessage, setTaskErrorMessage] = useState('');
   const [noteActionMessage, setNoteActionMessage] = useState('');
   const [pendingTaskSourceNoteId, setPendingTaskSourceNoteId] = useState<string | null>(null);
+  const [isComposerExpanded, setIsComposerExpanded] = useState(false);
 
   const [noteTitle, setNoteTitle] = useState('');
   const [noteInput, setNoteInput] = useState('');
@@ -454,8 +455,22 @@ export default function HomePage() {
       </SignedOut>
 
       <SignedIn>
-        <section className="layout">
-          <article className="panel">
+        <section>
+          {!isComposerExpanded && (
+            <button className="composer-collapsed" onClick={() => setIsComposerExpanded(true)}>
+              <span>Take a note...</span>
+            </button>
+          )}
+
+          {isComposerExpanded && (
+            <div className="composer-header">
+              <button className="mini-btn" onClick={() => setIsComposerExpanded(false)}>Close</button>
+            </div>
+          )}
+
+          <div className="layout">
+          {isComposerExpanded && (
+            <article className="panel">
             <h2>Voice Notes</h2>
             <div className="row buttons-inline">
               <button className="btn btn-primary" onClick={startRecording}>Start Recording</button>
@@ -545,27 +560,32 @@ export default function HomePage() {
               <button className="mini-btn" disabled={notesPage >= noteTotalPages} onClick={() => setNotesPage((prev) => Math.min(noteTotalPages, prev + 1))}>Next</button>
             </div>
           </article>
+          )}
 
           <article className="panel">
             <h2>Daily To-Do List</h2>
 
-            <label htmlFor="taskTitle">Task</label>
-            <input id="taskTitle" value={taskTitle} onChange={(e) => setTaskTitle(e.target.value)} placeholder="Plan weekly meals" />
+            {isComposerExpanded && (
+              <>
+                <label htmlFor="taskTitle">Task</label>
+                <input id="taskTitle" value={taskTitle} onChange={(e) => setTaskTitle(e.target.value)} placeholder="Plan weekly meals" />
 
-            <label htmlFor="taskDetails">Details (optional)</label>
-            <textarea id="taskDetails" value={taskDetails} onChange={(e) => setTaskDetails(e.target.value)} placeholder="Add helpful notes" rows={4} />
+                <label htmlFor="taskDetails">Details (optional)</label>
+                <textarea id="taskDetails" value={taskDetails} onChange={(e) => setTaskDetails(e.target.value)} placeholder="Add helpful notes" rows={4} />
 
-            <label htmlFor="taskUrgency">Priority</label>
-            <select id="taskUrgency" value={taskUrgency} onChange={(e) => setTaskUrgency(e.target.value)}>
-              <option value="3">High</option>
-              <option value="2">Medium</option>
-              <option value="1">Low</option>
-            </select>
+                <label htmlFor="taskUrgency">Priority</label>
+                <select id="taskUrgency" value={taskUrgency} onChange={(e) => setTaskUrgency(e.target.value)}>
+                  <option value="3">High</option>
+                  <option value="2">Medium</option>
+                  <option value="1">Low</option>
+                </select>
 
-            <label htmlFor="taskDue">Due date (optional)</label>
-            <input id="taskDue" type="date" value={taskDue} onChange={(e) => setTaskDue(e.target.value)} />
+                <label htmlFor="taskDue">Due date (optional)</label>
+                <input id="taskDue" type="date" value={taskDue} onChange={(e) => setTaskDue(e.target.value)} />
 
-            <button className="btn btn-primary btn-wide" onClick={saveTask}>Add Task</button>
+                <button className="btn btn-primary btn-wide" onClick={saveTask}>Add Task</button>
+              </>
+            )}
 
             <div className="tab-row">
               <button className={`tab-btn ${taskTab === 'active' ? 'active' : ''}`} onClick={() => setTaskTab('active')}>Active Tasks ({taskCounts.active})</button>
@@ -624,7 +644,7 @@ export default function HomePage() {
                         <br />
                         <small>{task.details || 'No details'} • Due: {task.dueDate || 'No date'}</small>
                         {task.status === 'deleted' && task.deletedAt && (
-                          <small className="status retention-note">Permanently deletes on: {new Date(new Date(task.deletedAt).getTime() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString()}</small>
+                          <p className="task-retention-note">Permanently deletes on: {new Date(new Date(task.deletedAt).getTime() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString()}</p>
                         )}
                       </div>
                       <div className="right-stack">
@@ -679,6 +699,7 @@ export default function HomePage() {
               <button className="mini-btn" disabled={taskPage >= taskTotalPages} onClick={() => setTaskPage((prev) => Math.min(taskTotalPages, prev + 1))}>Next</button>
             </div>
           </article>
+          </div>
         </section>
       </SignedIn>
     </main>
