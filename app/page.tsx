@@ -77,6 +77,7 @@ export default function HomePage() {
   const [noteActionMessage, setNoteActionMessage] = useState('');
   const [pendingTaskSourceNoteId, setPendingTaskSourceNoteId] = useState<string | null>(null);
   const [isComposerExpanded, setIsComposerExpanded] = useState(false);
+  const [isTaskPanelOpen, setIsTaskPanelOpen] = useState(false);
 
   const [noteTitle, setNoteTitle] = useState('');
   const [noteInput, setNoteInput] = useState('');
@@ -386,6 +387,7 @@ export default function HomePage() {
     setTaskTab('active');
     setTaskPage(1);
     setTaskErrorMessage('');
+    setIsTaskPanelOpen(true);
     setNoteActionMessage('Task details copied to the Daily To-Do form. Click Add Task to save.');
   }
 
@@ -657,18 +659,32 @@ export default function HomePage() {
       <SignedIn>
         <section>
           {!isComposerExpanded && (
-            <button className="composer-collapsed" onClick={() => setIsComposerExpanded(true)}>
+            <button
+              className="composer-collapsed"
+              onClick={() => {
+                setIsComposerExpanded(true);
+                setIsTaskPanelOpen(false);
+              }}
+            >
               <span>Take a note...</span>
             </button>
           )}
 
           {isComposerExpanded && (
             <div className="composer-header">
-              <button className="mini-btn" onClick={() => setIsComposerExpanded(false)}>Close</button>
+              <button
+                className="mini-btn"
+                onClick={() => {
+                  setIsComposerExpanded(false);
+                  setIsTaskPanelOpen(false);
+                }}
+              >
+                Close
+              </button>
             </div>
           )}
 
-          <div className="layout">
+          <div className={`layout ${isComposerExpanded && !isTaskPanelOpen ? 'layout-single' : ''}`}>
           {isComposerExpanded && (
             <article className="panel">
             <h2>Voice Notes</h2>
@@ -783,10 +799,17 @@ export default function HomePage() {
           </article>
           )}
 
+          {(!isComposerExpanded || isTaskPanelOpen) && (
           <article className="task-section">
-            <h2>Daily To-Do List</h2>
-
             {isComposerExpanded && (
+              <div className="task-panel-header">
+                <h2>Daily To-Do List</h2>
+                <button className="mini-btn" onClick={() => setIsTaskPanelOpen(false)}>Close</button>
+              </div>
+            )}
+            {!isComposerExpanded && <h2>Daily To-Do List</h2>}
+
+            {isComposerExpanded && isTaskPanelOpen && (
               <>
                 <label htmlFor="taskTitle">Task</label>
                 <input id="taskTitle" value={taskTitle} onChange={(e) => setTaskTitle(e.target.value)} placeholder="Plan weekly meals" />
@@ -977,6 +1000,7 @@ export default function HomePage() {
               <button className="mini-btn" disabled={taskPage >= taskTotalPages} onClick={() => setTaskPage((prev) => Math.min(taskTotalPages, prev + 1))}>Next</button>
             </div>
           </article>
+          )}
           </div>
         </section>
       </SignedIn>
