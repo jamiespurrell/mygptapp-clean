@@ -64,6 +64,8 @@ model VoiceNote {
   createdAt     DateTime        @default(now()) @map("created_at")
   updatedAt     DateTime        @updatedAt @map("updated_at")
 
+  sourceTasks   Task[]
+
   @@index([clerkUserId, status])
   @@map("voice_notes")
 }
@@ -116,6 +118,7 @@ model Task {
 
   workspace     Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   createdBy     User         @relation("TasksCreated", fields: [createdById], references: [id])
+  sourceVoiceNote VoiceNote? @relation(fields: [sourceVoiceNoteId], references: [id], onDelete: SetNull)
   completions   TaskCompletion[]
 
   @@index([workspaceId])

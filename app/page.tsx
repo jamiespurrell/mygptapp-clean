@@ -15,6 +15,11 @@ type Task = {
   createdAt: string;
   status: ItemStatus;
   sourceVoiceNoteId: string | null;
+  sourceVoiceNote: {
+    id: string;
+    type: 'TEXT' | 'AUDIO';
+    audioUrl: string | null;
+  } | null;
   deletedAt: string | null;
 };
 
@@ -113,6 +118,11 @@ export default function HomePage() {
           priority: number;
           status: 'ACTIVE' | 'ARCHIVED' | 'DELETED';
           sourceVoiceNoteId: string | null;
+          sourceVoiceNote: {
+            id: string;
+            type: 'TEXT' | 'AUDIO';
+            audioUrl: string | null;
+          } | null;
           deletedAt: string | null;
           createdAt: string;
         }>;
@@ -130,6 +140,7 @@ export default function HomePage() {
             createdAt: task.createdAt,
             status: (task.status === 'DELETED' ? 'deleted' : task.status === 'ARCHIVED' ? 'archived' : 'active') as ItemStatus,
             sourceVoiceNoteId: task.sourceVoiceNoteId,
+            sourceVoiceNote: task.sourceVoiceNote,
             deletedAt: task.deletedAt,
           }))
           .sort((a, b) => b.score - a.score),
@@ -694,6 +705,7 @@ export default function HomePage() {
                         <strong>{task.title}</strong>
                         <br />
                         <small>{task.details || 'No details'} • Due: {task.dueDate || 'No date'}</small>
+                        {task.sourceVoiceNote?.audioUrl ? <audio controls src={task.sourceVoiceNote.audioUrl} /> : null}
                         {task.status === 'deleted' && task.deletedAt && (
                           <p className="task-retention-note">Permanently deletes on: {new Date(new Date(task.deletedAt).getTime() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString()}</p>
                         )}

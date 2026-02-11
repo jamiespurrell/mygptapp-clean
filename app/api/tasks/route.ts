@@ -70,6 +70,13 @@ export async function GET(request: Request) {
         priority: true,
         status: true,
         sourceVoiceNoteId: true,
+        sourceVoiceNote: {
+          select: {
+            id: true,
+            type: true,
+            audioUrl: true,
+          },
+        },
         deletedAt: true,
         createdAt: true,
       },
@@ -171,6 +178,13 @@ export async function POST(request: Request) {
         priority: true,
         status: true,
         sourceVoiceNoteId: true,
+        sourceVoiceNote: {
+          select: {
+            id: true,
+            type: true,
+            audioUrl: true,
+          },
+        },
         deletedAt: true,
         createdAt: true,
       },
