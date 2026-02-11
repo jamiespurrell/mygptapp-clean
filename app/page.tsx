@@ -783,7 +783,7 @@ export default function HomePage() {
           </article>
           )}
 
-          <article className="panel">
+          <article className="task-section">
             <h2>Daily To-Do List</h2>
 
             {isComposerExpanded && (
@@ -853,23 +853,15 @@ export default function HomePage() {
               </div>
             )}
 
-            <ul className="task-list">
-              {taskErrorMessage && <li className="empty-item">{taskErrorMessage}</li>}
+            <div className="task-grid-wrap">
+              {taskErrorMessage && <p className="empty-item">{taskErrorMessage}</p>}
               {pagedTasks.length ? (
-                pagedTasks.map((task) => {
-                  const priority = task.urgency === 3 ? 'High' : task.urgency === 2 ? 'Medium' : 'Low';
-                  return (
-                    <li key={task.id} className="task-item">
-                      <div>
-                        <strong>{task.title}</strong>
-                        <br />
-                        <small>{task.details || 'No details'} • Due: {task.dueDate || 'No date'}</small>
-                        {task.sourceVoiceNote?.audioUrl ? <audio controls src={task.sourceVoiceNote.audioUrl} /> : null}
-                        {task.status === 'deleted' && task.deletedAt && (
-                          <p className="task-retention-note">Permanently deletes on: {new Date(new Date(task.deletedAt).getTime() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString()}</p>
-                        )}
-                      </div>
-                      <div className="right-stack">
+                <div className="task-grid">
+                  {pagedTasks.map((task) => {
+                    const priority = task.urgency === 3 ? 'High' : task.urgency === 2 ? 'Medium' : 'Low';
+                    return (
+                    <article key={task.id} className="task-card">
+                      <div className="task-card-header">
                         <span className={`priority-pill priority-${priority.toLowerCase()}`}>{priority}</span>
                         <div className="task-menu-wrap">
                           <button
@@ -906,13 +898,23 @@ export default function HomePage() {
                           )}
                         </div>
                       </div>
-                    </li>
-                  );
-                })
+                      <div>
+                        <strong>{task.title}</strong>
+                        <br />
+                        <small>{task.details || 'No details'} • Due: {task.dueDate || 'No date'}</small>
+                        {task.sourceVoiceNote?.audioUrl ? <audio controls src={task.sourceVoiceNote.audioUrl} /> : null}
+                        {task.status === 'deleted' && task.deletedAt && (
+                          <p className="task-retention-note">Permanently deletes on: {new Date(new Date(task.deletedAt).getTime() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString()}</p>
+                        )}
+                      </div>
+                    </article>
+                    );
+                  })}
+                </div>
               ) : (
-                <li className="empty-item">No {taskTab} tasks yet. Add your first to-do above!</li>
+                <p className="empty-item">No {taskTab} tasks yet. Add your first to-do above!</p>
               )}
-            </ul>
+            </div>
 
             {taskTab === 'deleted' && (
               <p className="status retention-note">Deleted tasks are permanently removed 30 days after first deletion.</p>
