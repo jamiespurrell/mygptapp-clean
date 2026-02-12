@@ -314,6 +314,8 @@ export default function HomePage() {
   async function saveTask() {
     if (!taskTitle.trim()) return;
 
+    const isVoiceNoteTaskCreateFlow = Boolean(pendingTaskSourceNoteId && isTaskCreateModalOpen);
+
     try {
       setTaskErrorMessage('');
       const response = await fetch('/api/tasks', {
@@ -346,6 +348,16 @@ export default function HomePage() {
       setTaskUrgency('2');
       setIsTaskCreateModalOpen(false);
       setNoteActionMessage('');
+      setTaskTab('active');
+      setTaskPage(1);
+
+      if (isVoiceNoteTaskCreateFlow) {
+        setIsComposerExpanded(false);
+        setIsTaskPanelOpen(false);
+        setTaskFromDate('');
+        setTaskToDate('');
+      }
+
       await fetchTasks();
     } catch (error) {
       console.error('Failed saving task', error);
