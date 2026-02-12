@@ -398,6 +398,8 @@ export default function HomePage() {
 
     setTaskTitle(note.title.trim() || 'Follow-up task');
     setTaskDetails(`${noteContext}\n\n${source}`);
+    setTaskDue('');
+    setTaskUrgency('2');
     setPendingTaskSourceNoteId(note.id);
     setNotes((prev) => prev.map((item) => (item.id === note.id ? { ...item, linkedTaskId: 'copied-to-form' } : item)));
     setTaskTab('active');
@@ -882,36 +884,6 @@ export default function HomePage() {
               </div>
             </div>
 
-            {isTaskCreateModalOpen && (
-              <div className="date-dialog-backdrop" role="dialog" aria-modal="true" aria-label="Create task from voice note" onClick={closeTaskCreateModal}>
-                <div className="date-dialog edit-dialog" onClick={(event) => event.stopPropagation()}>
-                  <h3>Create task</h3>
-                  <label htmlFor="taskTitleModal">Task</label>
-                  <input id="taskTitleModal" value={taskTitle} onChange={(e) => setTaskTitle(e.target.value)} placeholder="Plan weekly meals" />
-
-                  <label htmlFor="taskDetailsModal">Details (optional)</label>
-                  <textarea id="taskDetailsModal" value={taskDetails} onChange={(e) => setTaskDetails(e.target.value)} placeholder="Add helpful notes" rows={4} />
-
-                  <label htmlFor="taskUrgencyModal">Priority</label>
-                  <select id="taskUrgencyModal" value={taskUrgency} onChange={(e) => setTaskUrgency(e.target.value)}>
-                    <option value="3">High</option>
-                    <option value="2">Medium</option>
-                    <option value="1">Low</option>
-                  </select>
-
-                  <label htmlFor="taskDueModal">Due date (optional)</label>
-                  <input id="taskDueModal" type="date" value={taskDue} onChange={(e) => setTaskDue(e.target.value)} />
-
-                  {taskErrorMessage ? <p className="status">{taskErrorMessage}</p> : null}
-
-                  <div className="date-dialog-actions">
-                    <button className="mini-btn" onClick={closeTaskCreateModal}>Cancel</button>
-                    <button className="btn btn-primary" onClick={saveTask}>Add Task</button>
-                  </div>
-                </div>
-              </div>
-            )}
-
             {taskDateDialogOpen && (
               <div className="date-dialog-backdrop" role="dialog" aria-modal="true" aria-label="Select task date range">
                 <div className="date-dialog">
@@ -1060,6 +1032,36 @@ export default function HomePage() {
           </article>
           )}
           </div>
+
+          {isTaskCreateModalOpen && (
+            <div className="date-dialog-backdrop" role="dialog" aria-modal="true" aria-label="Create task from voice note" onClick={closeTaskCreateModal}>
+              <div className="date-dialog edit-dialog" onClick={(event) => event.stopPropagation()}>
+                <h3>Create task</h3>
+                <label htmlFor="taskTitleModal">Task</label>
+                <input id="taskTitleModal" value={taskTitle} onChange={(e) => setTaskTitle(e.target.value)} placeholder="Plan weekly meals" />
+
+                <label htmlFor="taskDetailsModal">Details (optional)</label>
+                <textarea id="taskDetailsModal" value={taskDetails} onChange={(e) => setTaskDetails(e.target.value)} placeholder="Add helpful notes" rows={4} />
+
+                <label htmlFor="taskUrgencyModal">Priority</label>
+                <select id="taskUrgencyModal" value={taskUrgency} onChange={(e) => setTaskUrgency(e.target.value)}>
+                  <option value="3">High</option>
+                  <option value="2">Medium</option>
+                  <option value="1">Low</option>
+                </select>
+
+                <label htmlFor="taskDueModal">Due date (optional)</label>
+                <input id="taskDueModal" type="date" value={taskDue} onChange={(e) => setTaskDue(e.target.value)} />
+
+                {taskErrorMessage ? <p className="status">{taskErrorMessage}</p> : null}
+
+                <div className="date-dialog-actions">
+                  <button className="mini-btn" onClick={closeTaskCreateModal}>Cancel</button>
+                  <button className="btn btn-primary" onClick={saveTask}>Add Task</button>
+                </div>
+              </div>
+            </div>
+          )}
         </section>
       </SignedIn>
     </main>
