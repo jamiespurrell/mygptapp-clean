@@ -76,6 +76,7 @@ export default function HomePage() {
   const [taskErrorMessage, setTaskErrorMessage] = useState('');
   const [noteActionMessage, setNoteActionMessage] = useState('');
   const [pendingTaskSourceNoteId, setPendingTaskSourceNoteId] = useState<string | null>(null);
+  const [isTaskCreateModalOpen, setIsTaskCreateModalOpen] = useState(false);
   const [isComposerExpanded, setIsComposerExpanded] = useState(false);
   const [isTaskPanelOpen, setIsTaskPanelOpen] = useState(false);
 
@@ -234,6 +235,19 @@ export default function HomePage() {
   useEffect(() => setTaskMenuOpenId(null), [taskTab, taskPage, taskFromDate, taskToDate]);
   useEffect(() => setNoteMenuOpenId(null), [notesTab, notesPage, noteFromDate, noteToDate]);
 
+  useEffect(() => {
+    if (!isTaskCreateModalOpen) return;
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        closeTaskCreateModal();
+      }
+    };
+
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [isTaskCreateModalOpen]);
+
   function openTaskDateDialog() {
     setTaskDateDraftFrom(taskFromDate);
     setTaskDateDraftTo(taskToDate);
@@ -330,6 +344,8 @@ export default function HomePage() {
       setTaskDetails('');
       setTaskDue('');
       setTaskUrgency('2');
+      setIsTaskCreateModalOpen(false);
+      setNoteActionMessage('');
       await fetchTasks();
     } catch (error) {
       console.error('Failed saving task', error);
@@ -387,8 +403,18 @@ export default function HomePage() {
     setTaskTab('active');
     setTaskPage(1);
     setTaskErrorMessage('');
-    setIsTaskPanelOpen(true);
-    setNoteActionMessage('Task details copied to the Daily To-Do form. Click Add Task to save.');
+    setIsTaskCreateModalOpen(true);
+    setNoteActionMessage('Task draft copied from voice note. Confirm with Add Task to save.');
+  }
+
+  function closeTaskCreateModal() {
+    setIsTaskCreateModalOpen(false);
+    setPendingTaskSourceNoteId(null);
+    setTaskTitle('');
+    setTaskDetails('');
+    setTaskDue('');
+    setTaskUrgency('2');
+    setNoteActionMessage('');
   }
 
 
@@ -811,48 +837,80 @@ export default function HomePage() {
 
             {isComposerExpanded && isTaskPanelOpen && (
               <>
-                <label htmlFor="taskTitle">Task</label>
-                <input id="taskTitle" value={taskTitle} onChange={(e) => setTaskTitle(e.target.value)} placeholder="Plan weekly meals" />
+                <label htmlFor="taskTitleInline">Task</label>
+                <input id="taskTitleInline" value={taskTitle} onChange={(e) => setTaskTitle(e.target.value)} placeholder="Plan weekly meals" />
 
-                <label htmlFor="taskDetails">Details (optional)</label>
-                <textarea id="taskDetails" value={taskDetails} onChange={(e) => setTaskDetails(e.target.value)} placeholder="Add helpful notes" rows={4} />
+                <label htmlFor="taskDetailsInline">Details (optional)</label>
+                <textarea id="taskDetailsInline" value={taskDetails} onChange={(e) => setTaskDetails(e.target.value)} placeholder="Add helpful notes" rows={4} />
 
-                <label htmlFor="taskUrgency">Priority</label>
-                <select id="taskUrgency" value={taskUrgency} onChange={(e) => setTaskUrgency(e.target.value)}>
+                <label htmlFor="taskUrgencyInline">Priority</label>
+                <select id="taskUrgencyInline" value={taskUrgency} onChange={(e) => setTaskUrgency(e.target.value)}>
                   <option value="3">High</option>
                   <option value="2">Medium</option>
                   <option value="1">Low</option>
                 </select>
 
-                <label htmlFor="taskDue">Due date (optional)</label>
-                <input id="taskDue" type="date" value={taskDue} onChange={(e) => setTaskDue(e.target.value)} />
+                <label htmlFor="taskDueInline">Due date (optional)</label>
+                <input id="taskDueInline" type="date" value={taskDue} onChange={(e) => setTaskDue(e.target.value)} />
 
                 <button className="btn btn-primary btn-wide" onClick={saveTask}>Add Task</button>
               </>
             )}
 
-            <div className="tab-row">
-              <button className={`tab-btn ${taskTab === 'active' ? 'active' : ''}`} onClick={() => setTaskTab('active')}>Active Tasks ({taskCounts.active})</button>
-              <button className={`tab-btn ${taskTab === 'archived' ? 'active' : ''}`} onClick={() => setTaskTab('archived')}>Archived Tasks ({taskCounts.archived})</button>
-              <button className={`tab-btn ${taskTab === 'deleted' ? 'active' : ''}`} onClick={() => setTaskTab('deleted')}>Deleted Tasks ({taskCounts.deleted})</button>
+            <div className="tab-filter-row">
+              <div className="tab-row task-tab-row">
+                <button className={`tab-btn ${taskTab === 'active' ? 'active' : ''}`} onClick={() => setTaskTab('active')}>Active Tasks ({taskCounts.active})</button>
+                <button className={`tab-btn ${taskTab === 'archived' ? 'active' : ''}`} onClick={() => setTaskTab('archived')}>Archived Tasks ({taskCounts.archived})</button>
+                <button className={`tab-btn ${taskTab === 'deleted' ? 'active' : ''}`} onClick={() => setTaskTab('deleted')}>Deleted Tasks ({taskCounts.deleted})</button>
+              </div>
+
+              <div className="filter-row task-filter-row">
+                <button className="date-display" onClick={openTaskDateDialog} aria-label="Select task from date">
+                  {taskFromDate || 'yyyy-mm-dd'}
+                </button>
+                <span>→</span>
+                <button className="date-display" onClick={openTaskDateDialog} aria-label="Select task to date">
+                  {taskToDate || 'yyyy-mm-dd'}
+                </button>
+                <button className="calendar-trigger" onClick={openTaskDateDialog} aria-label="Open task date range dialog">📅</button>
+                <label htmlFor="taskPageSize" className="show-label">Show</label>
+                <select id="taskPageSize" value={taskPageSize} onChange={(e) => setTaskPageSize(Number(e.target.value))}>
+                  <option value={5}>5</option>
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                </select>
+              </div>
             </div>
 
-            <div className="filter-row task-filter-row">
-              <button className="date-display" onClick={openTaskDateDialog} aria-label="Select task from date">
-                {taskFromDate || 'yyyy-mm-dd'}
-              </button>
-              <span>→</span>
-              <button className="date-display" onClick={openTaskDateDialog} aria-label="Select task to date">
-                {taskToDate || 'yyyy-mm-dd'}
-              </button>
-              <button className="calendar-trigger" onClick={openTaskDateDialog} aria-label="Open task date range dialog">📅</button>
-              <label htmlFor="taskPageSize" className="show-label">Show</label>
-              <select id="taskPageSize" value={taskPageSize} onChange={(e) => setTaskPageSize(Number(e.target.value))}>
-                <option value={5}>5</option>
-                <option value={10}>10</option>
-                <option value={20}>20</option>
-              </select>
-            </div>
+            {isTaskCreateModalOpen && (
+              <div className="date-dialog-backdrop" role="dialog" aria-modal="true" aria-label="Create task from voice note" onClick={closeTaskCreateModal}>
+                <div className="date-dialog edit-dialog" onClick={(event) => event.stopPropagation()}>
+                  <h3>Create task</h3>
+                  <label htmlFor="taskTitleModal">Task</label>
+                  <input id="taskTitleModal" value={taskTitle} onChange={(e) => setTaskTitle(e.target.value)} placeholder="Plan weekly meals" />
+
+                  <label htmlFor="taskDetailsModal">Details (optional)</label>
+                  <textarea id="taskDetailsModal" value={taskDetails} onChange={(e) => setTaskDetails(e.target.value)} placeholder="Add helpful notes" rows={4} />
+
+                  <label htmlFor="taskUrgencyModal">Priority</label>
+                  <select id="taskUrgencyModal" value={taskUrgency} onChange={(e) => setTaskUrgency(e.target.value)}>
+                    <option value="3">High</option>
+                    <option value="2">Medium</option>
+                    <option value="1">Low</option>
+                  </select>
+
+                  <label htmlFor="taskDueModal">Due date (optional)</label>
+                  <input id="taskDueModal" type="date" value={taskDue} onChange={(e) => setTaskDue(e.target.value)} />
+
+                  {taskErrorMessage ? <p className="status">{taskErrorMessage}</p> : null}
+
+                  <div className="date-dialog-actions">
+                    <button className="mini-btn" onClick={closeTaskCreateModal}>Cancel</button>
+                    <button className="btn btn-primary" onClick={saveTask}>Add Task</button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {taskDateDialogOpen && (
               <div className="date-dialog-backdrop" role="dialog" aria-modal="true" aria-label="Select task date range">

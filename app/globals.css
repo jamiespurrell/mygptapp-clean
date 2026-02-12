@@ -42,10 +42,13 @@ textarea { resize: vertical; min-height: 110px; }
 .empty-item { list-style: none; text-align: center; color: #b7c5e6; font-weight: 600; padding-top: 1.2rem; }
 
 .tab-row { display: flex; flex-wrap: wrap; gap: 0.55rem; margin-top: 1rem; }
+.task-tab-row { margin-top: 0; }
+.tab-filter-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem; margin-top: 1rem; }
 .tab-btn { border: 1px solid #365183; background: #071227; color: #d9e6ff; border-radius: 999px; padding: 0.3rem 0.75rem; font-weight: 700; cursor: pointer; }
 .tab-btn.active { background: #2d6ff1; border-color: #2d6ff1; color: white; }
 .filter-row { display: grid; grid-template-columns: 1fr auto 1fr auto 90px; gap: 0.5rem; align-items: center; margin-top: 0.9rem; }
-.task-filter-row { grid-template-columns: 1fr auto 1fr auto auto 90px; }
+.tab-filter-row .filter-row { margin-top: 0; }
+.task-filter-row { grid-template-columns: minmax(130px, 1fr) auto minmax(130px, 1fr) auto auto 90px; }
 .filter-row span { color: #94a6ca; font-weight: 700; text-align: center; }
 .filter-row input, .filter-row select { margin: 0; }
 .show-label { margin: 0; text-align: right; }
@@ -89,6 +92,7 @@ textarea { resize: vertical; min-height: 110px; }
   .layout { grid-template-columns: 1fr; }
   .topbar, .app { padding: 1rem; }
   .stack-mobile { flex-direction: column; }
+  .tab-filter-row { align-items: stretch; }
   .filter-row { grid-template-columns: 1fr auto 1fr; }
   .task-filter-row { grid-template-columns: 1fr auto 1fr auto auto; }
   .task-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
