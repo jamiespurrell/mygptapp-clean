@@ -1,16 +1,10 @@
-import { auth, currentUser } from '@clerk/nextjs/server';
 import { db } from '../../../lib/db';
+import { getCurrentUserEmail } from '../../../lib/auth/current-user';
 
 export async function getUserWorkspaceContext() {
-  const { userId } = await auth();
-  if (!userId) {
-    return { error: 'Unauthorized' } as const;
-  }
-
-  const clerkUser = await currentUser();
-  const email = clerkUser?.primaryEmailAddress?.emailAddress?.toLowerCase();
+  const email = await getCurrentUserEmail();
   if (!email) {
-    return { error: 'No primary email available' } as const;
+    return { error: 'Unauthorized' } as const;
   }
 
   const user = await db.user.upsert({

@@ -16,7 +16,10 @@
     "pg": "^8.18.0",
     "prisma": "^7.3.0",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "@auth/prisma-adapter": "^2.10.0",
+    "bcryptjs": "^2.4.3",
+    "next-auth": "^5.0.0-beta.25"
   },
   "devDependencies": {
     "@types/node": "^22.13.1",

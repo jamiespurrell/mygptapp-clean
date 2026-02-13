@@ -1,8 +1,8 @@
-import { auth } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 import { writeFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { getCurrentUser } from '../../../lib/auth/current-user';
 import { db } from '../../../lib/db';
 
 type VoiceNoteRow = {
@@ -47,8 +47,8 @@ function mapType(type: 'TEXT' | 'AUDIO') {
 
 export async function GET(request: Request) {
   try {
-    const { userId } = await auth();
-    if (!userId) {
+    const user = await getCurrentUser();
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -59,7 +59,7 @@ export async function GET(request: Request) {
 
     const notes = await db.voiceNote.findMany({
       where: {
-        clerkUserId: userId,
+        clerkUserId: user.userId,
         ...(statusFilter.prismaStatus ? { status: statusFilter.prismaStatus } : {}),
       },
       orderBy: { createdAt: 'desc' },
@@ -91,8 +91,8 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const { userId } = await auth();
-    if (!userId) {
+    const user = await getCurrentUser();
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -135,7 +135,7 @@ export async function POST(request: Request) {
 
     const note = await db.voiceNote.create({
       data: {
-        clerkUserId: userId,
+        clerkUserId: user.userId,
         type,
         title: title || 'Untitled Note',
         content: content || null,

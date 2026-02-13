@@ -1,5 +1,5 @@
-import { auth } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
+import { getCurrentUser } from '../../../../../lib/auth/current-user';
 import { db } from '../../../../../lib/db';
 
 type ItemStatus = 'active' | 'archived' | 'deleted';
@@ -18,8 +18,8 @@ function mapPrismaStatusToUi(status: 'ACTIVE' | 'ARCHIVED' | 'DELETED') {
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { userId } = await auth();
-    if (!userId) {
+    const user = await getCurrentUser();
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -31,7 +31,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     }
 
     const existing = await db.voiceNote.findFirst({
-      where: { id, clerkUserId: userId },
+      where: { id, clerkUserId: user.userId },
       select: { id: true },
     });
 

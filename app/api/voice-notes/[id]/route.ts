@@ -1,5 +1,5 @@
-import { auth } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
+import { getCurrentUser } from '../../../../lib/auth/current-user';
 import { db } from '../../../../lib/db';
 
 function mapStatus(status: 'ACTIVE' | 'ARCHIVED' | 'DELETED') {
@@ -16,8 +16,8 @@ type Params = { params: Promise<{ id: string }> };
 
 export async function PATCH(request: Request, { params }: Params) {
   try {
-    const { userId } = await auth();
-    if (!userId) {
+    const user = await getCurrentUser();
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -30,7 +30,7 @@ export async function PATCH(request: Request, { params }: Params) {
     const existingNote = await db.voiceNote.findFirst({
       where: {
         id,
-        clerkUserId: userId,
+        clerkUserId: user.userId,
       },
       select: { id: true },
     });

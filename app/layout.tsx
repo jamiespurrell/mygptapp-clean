@@ -1,16 +1,13 @@
 import type { Metadata } from 'next';
-import {
-  ClerkProvider,
-  SignedIn,
-  SignedOut,
-  UserButton,
-} from '@clerk/nextjs';
+import { ClerkProvider } from '@clerk/nextjs';
 import { ThemeToggle } from '../components/theme-toggle';
+import { AuthSessionProvider } from '../components/auth-session-provider';
+import { AuthHeaderControls } from '../components/auth-header-controls';
 import './globals.css';
 
 export const metadata: Metadata = {
   title: 'Daily Voice Notes & Task Planner',
-  description: 'Voice notes and task planner with Clerk authentication',
+  description: 'Voice notes and task planner with optional Clerk/Auth.js authentication',
 };
 
 const themeInitScript = `(() => {
@@ -22,26 +19,23 @@ const themeInitScript = `(() => {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <ClerkProvider>
-      <html lang="en" suppressHydrationWarning>
-        <head>
-          <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
-        </head>
-        <body>
-          <header className="topbar">
-            <h1>Daily Voice Notes &amp; Task Planner</h1>
-            <div className="auth-actions">
-              <ThemeToggle />
-              <SignedOut>
-                <span className="status">Please sign in below to continue.</span>
-              </SignedOut>
-              <SignedIn>
-                <UserButton />
-              </SignedIn>
-            </div>
-          </header>
-          {children}
-        </body>
-      </html>
+      <AuthSessionProvider>
+        <html lang="en" suppressHydrationWarning>
+          <head>
+            <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+          </head>
+          <body>
+            <header className="topbar">
+              <h1>Daily Voice Notes &amp; Task Planner</h1>
+              <div className="auth-actions">
+                <ThemeToggle />
+                <AuthHeaderControls />
+              </div>
+            </header>
+            {children}
+          </body>
+        </html>
+      </AuthSessionProvider>
     </ClerkProvider>
   );
 }

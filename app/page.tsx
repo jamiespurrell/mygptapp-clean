@@ -1,6 +1,7 @@
 'use client';
 
-import { SignIn, SignedIn, SignedOut, useUser } from '@clerk/nextjs';
+import { SignIn, useUser } from '@clerk/nextjs';
+import { useSession } from 'next-auth/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 type ItemStatus = 'active' | 'archived' | 'deleted';
@@ -57,8 +58,14 @@ function inDateRange(value: string, from: string, to: string) {
   return true;
 }
 
+const authProvider = process.env.NEXT_PUBLIC_AUTH_PROVIDER === 'authjs' ? 'authjs' : 'clerk';
+
 export default function HomePage() {
-  const { user } = useUser();
+  const { user: clerkUser } = useUser();
+  const { data: authJsSession } = useSession();
+  const user = authProvider === 'authjs'
+    ? (authJsSession?.user?.id ? { id: authJsSession.user.id, primaryEmailAddress: { emailAddress: authJsSession.user.email ?? '' } } : null)
+    : clerkUser;
   const [taskTitle, setTaskTitle] = useState('');
   const [taskDetails, setTaskDetails] = useState('');
   const [taskDue, setTaskDue] = useState('');
@@ -684,19 +691,28 @@ export default function HomePage() {
   const pagedTasks = filteredTasks.slice((taskPage - 1) * taskPageSize, taskPage * taskPageSize);
   const pagedNotes = filteredNotes.slice((notesPage - 1) * notesPageSize, notesPage * notesPageSize);
 
+  const isAuthenticated = Boolean(user?.id);
+
   return (
     <main className="app">
-      <SignedOut>
+      {!isAuthenticated && (
         <section className="panel auth-panel">
           <h2>Welcome back</h2>
-          <p className="status">Sign in below to access your planner. New here? Use the sign-up link under the form.</p>
+          <p className="status">Sign in below to access your planner.</p>
           <div className="inline-auth">
-            <SignIn />
+            {authProvider === 'authjs' ? (
+              <div className="row stack-mobile">
+                <a className="btn btn-primary" href="/sign-in">Sign in</a>
+                <a className="btn btn-muted" href="/sign-up">Create account</a>
+              </div>
+            ) : (
+              <SignIn />
+            )}
           </div>
         </section>
-      </SignedOut>
+      )}
 
-      <SignedIn>
+      {isAuthenticated && (
         <section>
           {!isComposerExpanded && (
             <button
@@ -1075,7 +1091,7 @@ export default function HomePage() {
             </div>
           )}
         </section>
-      </SignedIn>
+      )}
     </main>
   );
 }
