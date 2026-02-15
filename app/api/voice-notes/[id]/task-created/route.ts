@@ -9,10 +9,6 @@ function isMissingTaskCreatedAtColumnError(error: unknown) {
   return code === 'P2022' || message.includes('task_created_at') || message.includes('taskCreatedAt');
 }
 
-function toIsoString(value: Date | string) {
-  return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
-}
-
 export async function PATCH(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { userId } = await auth();
@@ -25,32 +21,33 @@ export async function PATCH(_request: Request, { params }: { params: Promise<{ i
     try {
       const existing = await db.voiceNote.findFirst({
         where: { id, clerkUserId: userId },
-        select: { taskCreatedAt: true },
+        select: { id: true, taskCreatedAt: true },
       });
 
       if (!existing) {
         return NextResponse.json({ error: 'Voice note not found' }, { status: 404 });
       }
 
-      if (existing.taskCreatedAt) {
-        return NextResponse.json({
-          note: { taskCreatedAt: toIsoString(existing.taskCreatedAt) },
+      if (!existing.taskCreatedAt) {
+        await db.voiceNote.updateMany({
+          where: { id, clerkUserId: userId, taskCreatedAt: null },
+          data: { taskCreatedAt: new Date() },
         });
       }
 
-      const updated = await db.voiceNote.update({
-        where: { id },
-        data: { taskCreatedAt: new Date() },
+      const updated = await db.voiceNote.findFirst({
+        where: { id, clerkUserId: userId },
         select: { taskCreatedAt: true },
       });
 
-      if (!updated.taskCreatedAt) {
+      if (!updated?.taskCreatedAt) {
         return NextResponse.json({ error: 'Failed to mark voice note as created' }, { status: 500 });
       }
 
-      return NextResponse.json({
-        note: { taskCreatedAt: toIsoString(updated.taskCreatedAt) },
-      });
+      return NextResponse.json(
+        { note: { taskCreatedAt: updated.taskCreatedAt.toISOString() } },
+        { status: 200 },
+      );
     } catch (error) {
       if (isMissingTaskCreatedAtColumnError(error)) {
         console.error('PATCH /api/voice-notes/:id/task-created missing task_created_at column', error);

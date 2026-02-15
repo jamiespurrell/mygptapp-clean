@@ -408,6 +408,23 @@ export default function HomePage() {
   async function createTaskFromNote(note: Note) {
     if (note.linkedTaskId || note.taskCreatedAt) return;
 
+    const noteContext = note.content.trim() || 'No note text';
+    const source = `From ${note.noteType} captured ${new Date(note.createdAt).toLocaleString()}`;
+
+    setTaskTitle(note.title.trim() || 'Follow-up task');
+    setTaskDetails(`${noteContext}
+
+${source}`);
+    setTaskDue('');
+    setTaskUrgency('2');
+    setPendingTaskSourceNoteId(note.id);
+    setTaskTab('active');
+    setTaskPage(1);
+    setTaskErrorMessage('');
+    setIsTaskCreateModalOpen(true);
+    setNotes((prev) => prev.map((item) => (item.id === note.id ? { ...item, linkedTaskId: 'copied-to-form' } : item)));
+    setNoteActionMessage('Task draft copied from voice note. Confirm with Add Task to save.');
+
     try {
       const response = await fetch(`/api/voice-notes/${note.id}/task-created`, {
         method: 'PATCH',
@@ -415,34 +432,22 @@ export default function HomePage() {
       const payload = (await response.json()) as { note?: { taskCreatedAt: string }; error?: string };
       console.log('mark-created status', response.status);
       console.log('mark-created payload', payload);
+
       if (!response.ok || !payload.note?.taskCreatedAt) {
-        throw new Error(payload.error || 'Failed to mark voice note as created');
+        setNoteActionMessage(payload.error || 'Task draft copied, but failed to move note to Created.');
+        return;
       }
 
-      const noteContext = note.content.trim() || 'No note text';
-      const source = `From ${note.noteType} captured ${new Date(note.createdAt).toLocaleString()}`;
-
-      setTaskTitle(note.title.trim() || 'Follow-up task');
-      setTaskDetails(`${noteContext}
-
-${source}`);
-      setTaskDue('');
-      setTaskUrgency('2');
-      setPendingTaskSourceNoteId(note.id);
       setNotes((prev) =>
         prev.map((item) =>
           item.id === note.id
-            ? { ...item, linkedTaskId: 'copied-to-form', taskCreatedAt: payload.note?.taskCreatedAt || item.taskCreatedAt }
+            ? { ...item, taskCreatedAt: payload.note?.taskCreatedAt || item.taskCreatedAt }
             : item,
         ),
       );
-      setTaskTab('active');
-      setTaskPage(1);
-      setTaskErrorMessage('');
-      setIsTaskCreateModalOpen(true);
-      setNoteActionMessage('Task draft copied from voice note. Confirm with Add Task to save.');
     } catch (error) {
       console.error('Failed preparing task from voice note', error);
+      setNoteActionMessage('Task draft copied, but failed to move note to Created.');
     }
   }
 
