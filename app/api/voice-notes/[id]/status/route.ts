@@ -10,7 +10,8 @@ function mapUiStatusToPrisma(status: ItemStatus) {
   return 'ACTIVE';
 }
 
-function mapPrismaStatusToUi(status: 'ACTIVE' | 'ARCHIVED' | 'DELETED') {
+function mapPrismaStatusToUi(status: 'ACTIVE' | 'CREATED' | 'ARCHIVED' | 'DELETED') {
+  if (status === 'CREATED') return 'created';
   if (status === 'ARCHIVED') return 'archived';
   if (status === 'DELETED') return 'deleted';
   return 'active';

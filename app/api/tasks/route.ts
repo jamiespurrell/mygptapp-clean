@@ -1,3 +1,4 @@
+import { auth } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 import { db } from '../../../lib/db';
 import { getUserWorkspaceContext } from './_shared';
@@ -160,47 +161,111 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'dueDate must be a valid date (yyyy-mm-dd)' }, { status: 400 });
     }
 
-    const task = await db.task.create({
-      data: {
-        workspaceId: context.workspace.id,
-        createdById: context.user.id,
-        title,
-        notes: notes || null,
-        priority,
-        dueDate,
-        sourceVoiceNoteId,
-      },
-      select: {
-        id: true,
-        title: true,
-        notes: true,
-        dueDate: true,
-        priority: true,
-        status: true,
-        sourceVoiceNoteId: true,
-        sourceVoiceNote: {
-          select: {
-            id: true,
-            type: true,
-            audioUrl: true,
+    const { userId } = await auth();
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const result = await db.$transaction(async (tx) => {
+      if (sourceVoiceNoteId) {
+        const sourceNote = await tx.voiceNote.findFirst({
+          where: {
+            id: sourceVoiceNoteId,
+            clerkUserId: userId,
           },
+          select: { id: true },
+        });
+
+        if (!sourceNote) {
+          throw new Error('Voice note not found');
+        }
+      }
+
+      const createdTask = await tx.task.create({
+        data: {
+          workspaceId: context.workspace.id,
+          createdById: context.user.id,
+          title,
+          notes: notes || null,
+          priority,
+          dueDate,
+          sourceVoiceNoteId,
         },
-        deletedAt: true,
-        createdAt: true,
-      },
+        select: {
+          id: true,
+          title: true,
+          notes: true,
+          dueDate: true,
+          priority: true,
+          status: true,
+          sourceVoiceNoteId: true,
+          sourceVoiceNote: {
+            select: {
+              id: true,
+              type: true,
+              audioUrl: true,
+            },
+          },
+          deletedAt: true,
+          createdAt: true,
+        },
+      });
+
+      if (sourceVoiceNoteId) {
+        await tx.voiceNote.updateMany({
+          where: {
+            id: sourceVoiceNoteId,
+            clerkUserId: userId,
+            taskCreatedAt: null,
+          },
+          data: {
+            taskCreatedAt: new Date(),
+            status: 'CREATED',
+          },
+        });
+      }
+
+      const updatedVoiceNote = sourceVoiceNoteId
+        ? await tx.voiceNote.findFirst({
+            where: { id: sourceVoiceNoteId, clerkUserId: userId },
+            select: { id: true, status: true, taskCreatedAt: true },
+          })
+        : null;
+
+      return { createdTask, updatedVoiceNote };
     });
 
     return NextResponse.json(
       {
         task: {
-          ...task,
-          dueDate: task.dueDate ? task.dueDate.toISOString().split('T')[0] : null,
+          ...result.createdTask,
+          dueDate: result.createdTask.dueDate ? result.createdTask.dueDate.toISOString().split('T')[0] : null,
         },
+        voiceNote: result.updatedVoiceNote
+          ? {
+              id: result.updatedVoiceNote.id,
+              status: result.updatedVoiceNote.status === 'CREATED'
+                ? 'created'
+                : result.updatedVoiceNote.status === 'ARCHIVED'
+                  ? 'archived'
+                  : result.updatedVoiceNote.status === 'DELETED'
+                    ? 'deleted'
+                    : 'active',
+              taskCreatedAt: result.updatedVoiceNote.taskCreatedAt?.toISOString() || null,
+            }
+          : null,
       },
       { status: 201 },
     );
   } catch (error) {
     console.error('POST /api/tasks failed', error);
+    const message = error instanceof Error ? error.message : 'Failed to create task';
+    if (message === 'Voice note not found') {
+      return NextResponse.json({ error: message }, { status: 404 });
+    }
+    if (typeof error === 'object' && error && 'code' in error && (error as { code?: string }).code === 'P2002') {
+      return NextResponse.json({ error: 'A task has already been created from this voice note' }, { status: 409 });
+    }
     return NextResponse.json({ error: 'Failed to create task' }, { status: 500 });
   }
 }

@@ -2,7 +2,8 @@ import { auth } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 import { db } from '../../../../lib/db';
 
-function mapStatus(status: 'ACTIVE' | 'ARCHIVED' | 'DELETED') {
+function mapStatus(status: 'ACTIVE' | 'CREATED' | 'ARCHIVED' | 'DELETED') {
+  if (status === 'CREATED') return 'created';
   if (status === 'ARCHIVED') return 'archived';
   if (status === 'DELETED') return 'deleted';
   return 'active';
@@ -75,6 +76,7 @@ export async function PATCH(request: Request, { params }: Params) {
         audioMimeType: true,
         durationMs: true,
         status: true,
+        taskCreatedAt: true,
       },
     });
 
