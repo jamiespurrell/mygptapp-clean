@@ -362,6 +362,7 @@ export default function HomePage() {
       }
 
       await fetchTasks();
+      await fetchNotes();
     } catch (error) {
       console.error('Failed saving task', error);
       setTaskErrorMessage('Failed to add task');
@@ -406,7 +407,7 @@ export default function HomePage() {
   }
 
   async function createTaskFromNote(note: Note) {
-    if (note.taskCreatedAt) return;
+    if (note.taskCreatedAt || note.linkedTaskId) return;
 
     const noteContext = note.content.trim() || 'No note text';
     const source = `From ${note.noteType} captured ${new Date(note.createdAt).toLocaleString()}`;
@@ -422,55 +423,14 @@ ${source}`);
     setTaskPage(1);
     setTaskErrorMessage('');
     setIsTaskCreateModalOpen(true);
-    const optimisticTaskCreatedAt = new Date().toISOString();
     setNotes((prev) =>
       prev.map((item) =>
         item.id === note.id
-          ? { ...item, linkedTaskId: 'copied-to-form', taskCreatedAt: optimisticTaskCreatedAt }
+          ? { ...item, linkedTaskId: 'copied-to-form' }
           : item,
       ),
     );
     setNoteActionMessage('Task draft copied from voice note. Confirm with Add Task to save.');
-
-    try {
-      const response = await fetch(`/api/voice-notes/${note.id}/task-created`, {
-        method: 'PATCH',
-      });
-      const payload = (await response.json()) as { note?: { taskCreatedAt: string }; error?: string };
-      console.log('mark-created status', response.status);
-      console.log('mark-created payload', payload);
-
-      if (!response.ok || !payload.note?.taskCreatedAt) {
-        setNotes((prev) =>
-          prev.map((item) =>
-            item.id === note.id
-              ? { ...item, taskCreatedAt: null, linkedTaskId: null }
-              : item,
-          ),
-        );
-        setNoteActionMessage(payload.error || 'Task draft copied, but failed to move note to Created.');
-        return;
-      }
-
-      setNotes((prev) =>
-        prev.map((item) =>
-          item.id === note.id
-            ? { ...item, taskCreatedAt: payload.note?.taskCreatedAt || item.taskCreatedAt }
-            : item,
-        ),
-      );
-      await fetchNotes();
-    } catch (error) {
-      console.error('Failed preparing task from voice note', error);
-      setNotes((prev) =>
-        prev.map((item) =>
-          item.id === note.id
-            ? { ...item, taskCreatedAt: null, linkedTaskId: null }
-            : item,
-        ),
-      );
-      setNoteActionMessage('Task draft copied, but failed to move note to Created.');
-    }
   }
 
   function closeTaskCreateModal() {
@@ -855,9 +815,9 @@ ${source}`);
                         <button
                           className="mini-btn mini-primary"
                           onClick={() => createTaskFromNote(note)}
-                          disabled={Boolean(note.taskCreatedAt)}
+                          disabled={Boolean(note.linkedTaskId || note.taskCreatedAt)}
                         >
-                          {note.taskCreatedAt ? 'Copied to Form' : 'Create Task'}
+                          {note.linkedTaskId || note.taskCreatedAt ? 'Copied to Form' : 'Create Task'}
                         </button>
                       )}
                       <div className="task-menu-wrap">
