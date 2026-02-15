@@ -441,6 +441,13 @@ ${source}`);
       console.log('mark-created payload', payload);
 
       if (!response.ok || !payload.note?.taskCreatedAt) {
+        setNotes((prev) =>
+          prev.map((item) =>
+            item.id === note.id
+              ? { ...item, taskCreatedAt: null }
+              : item,
+          ),
+        );
         setNoteActionMessage(payload.error || 'Task draft copied, but failed to move note to Created.');
         return;
       }
@@ -452,8 +459,16 @@ ${source}`);
             : item,
         ),
       );
+      await fetchNotes();
     } catch (error) {
       console.error('Failed preparing task from voice note', error);
+      setNotes((prev) =>
+        prev.map((item) =>
+          item.id === note.id
+            ? { ...item, taskCreatedAt: null }
+            : item,
+        ),
+      );
       setNoteActionMessage('Task draft copied, but failed to move note to Created.');
     }
   }
