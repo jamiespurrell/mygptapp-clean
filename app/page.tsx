@@ -406,7 +406,7 @@ export default function HomePage() {
   }
 
   async function createTaskFromNote(note: Note) {
-    if (note.linkedTaskId || note.taskCreatedAt) return;
+    if (note.taskCreatedAt) return;
 
     const noteContext = note.content.trim() || 'No note text';
     const source = `From ${note.noteType} captured ${new Date(note.createdAt).toLocaleString()}`;
@@ -444,7 +444,7 @@ ${source}`);
         setNotes((prev) =>
           prev.map((item) =>
             item.id === note.id
-              ? { ...item, taskCreatedAt: null }
+              ? { ...item, taskCreatedAt: null, linkedTaskId: null }
               : item,
           ),
         );
@@ -465,7 +465,7 @@ ${source}`);
       setNotes((prev) =>
         prev.map((item) =>
           item.id === note.id
-            ? { ...item, taskCreatedAt: null }
+            ? { ...item, taskCreatedAt: null, linkedTaskId: null }
             : item,
         ),
       );
@@ -855,9 +855,9 @@ ${source}`);
                         <button
                           className="mini-btn mini-primary"
                           onClick={() => createTaskFromNote(note)}
-                          disabled={Boolean(note.linkedTaskId || note.taskCreatedAt)}
+                          disabled={Boolean(note.taskCreatedAt)}
                         >
-                          {note.linkedTaskId || note.taskCreatedAt ? 'Copied to Form' : 'Create Task'}
+                          {note.taskCreatedAt ? 'Copied to Form' : 'Create Task'}
                         </button>
                       )}
                       <div className="task-menu-wrap">
