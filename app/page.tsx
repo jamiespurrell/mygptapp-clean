@@ -4,7 +4,8 @@ import { SignIn, SignedIn, SignedOut, useUser } from '@clerk/nextjs';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 type ItemStatus = 'active' | 'archived' | 'deleted';
-type NoteTab = 'active' | 'created' | 'archived' | 'deleted';
+type NoteStatus = 'active' | 'created' | 'archived' | 'deleted';
+type NoteTab = NoteStatus;
 
 type Task = {
   id: string;
@@ -34,7 +35,7 @@ type Note = {
   audioUrl: string | null;
   audioMimeType: string | null;
   durationMs: number | null;
-  status: ItemStatus;
+  status: NoteStatus;
   taskCreatedAt: string | null;
   linkedTaskId?: string | null;
 };
@@ -189,7 +190,7 @@ export default function HomePage() {
           audioUrl: string | null;
           audioMimeType: string | null;
           durationMs: number | null;
-          status: ItemStatus;
+          status: NoteStatus;
           taskCreatedAt: string | null;
         }>
       };
@@ -333,13 +334,20 @@ export default function HomePage() {
         }),
       });
 
-      const payload = (await response.json()) as { task?: { id: string }; error?: string };
+      const payload = (await response.json()) as { task?: { id: string }; voiceNote?: { id: string; status: NoteStatus; taskCreatedAt: string | null }; error?: string };
       if (!response.ok) throw new Error(payload.error || 'Failed to create task');
 
       if (pendingTaskSourceNoteId) {
         setNotes((prev) =>
           prev.map((item) =>
-            item.id === pendingTaskSourceNoteId ? { ...item, linkedTaskId: payload.task?.id || 'created-task' } : item,
+            item.id === pendingTaskSourceNoteId
+              ? {
+                  ...item,
+                  linkedTaskId: payload.task?.id || 'created-task',
+                  status: payload.voiceNote?.status || 'created',
+                  taskCreatedAt: payload.voiceNote?.taskCreatedAt || new Date().toISOString(),
+                }
+              : item,
           ),
         );
       }
@@ -407,7 +415,7 @@ export default function HomePage() {
   }
 
   async function createTaskFromNote(note: Note) {
-    if (note.taskCreatedAt || note.linkedTaskId) return;
+    if (note.status === 'created' || note.linkedTaskId) return;
 
     const noteContext = note.content.trim() || 'No note text';
     const source = `From ${note.noteType} captured ${new Date(note.createdAt).toLocaleString()}`;
@@ -663,8 +671,8 @@ ${source}`);
 
   const noteCounts = useMemo(
     () => ({
-      active: notes.filter((note) => note.status === 'active' && !note.taskCreatedAt).length,
-      created: notes.filter((note) => note.status === 'active' && Boolean(note.taskCreatedAt)).length,
+      active: notes.filter((note) => note.status === 'active').length,
+      created: notes.filter((note) => note.status === 'created').length,
       archived: notes.filter((note) => note.status === 'archived').length,
       deleted: notes.filter((note) => note.status === 'deleted').length,
     }),
@@ -683,15 +691,11 @@ ${source}`);
 
   const filteredNotes = useMemo(
     () =>
-      notes.filter((note) => {
-        const matchesTab = notesTab === 'created'
-          ? note.status === 'active' && Boolean(note.taskCreatedAt)
-          : notesTab === 'active'
-            ? note.status === 'active' && !note.taskCreatedAt
-            : note.status === notesTab;
-
-        return matchesTab && inDateRange(note.createdAt, noteFromDate, noteToDate);
-      }),
+      notes.filter(
+        (note) =>
+          note.status === notesTab &&
+          inDateRange(note.createdAt, noteFromDate, noteToDate),
+      ),
     [notes, notesTab, noteFromDate, noteToDate],
   );
 
@@ -815,9 +819,9 @@ ${source}`);
                         <button
                           className="mini-btn mini-primary"
                           onClick={() => createTaskFromNote(note)}
-                          disabled={Boolean(note.linkedTaskId || note.taskCreatedAt)}
+                          disabled={Boolean(note.linkedTaskId || note.status === 'created')}
                         >
-                          {note.linkedTaskId || note.taskCreatedAt ? 'Copied to Form' : 'Create Task'}
+                          {note.linkedTaskId || note.status === 'created' ? 'Copied to Form' : 'Create Task'}
                         </button>
                       )}
                       <div className="task-menu-wrap">

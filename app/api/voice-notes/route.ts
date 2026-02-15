@@ -14,7 +14,7 @@ type VoiceNoteRow = {
   audioUrl: string | null;
   audioMimeType: string | null;
   durationMs: number | null;
-  status: 'ACTIVE' | 'ARCHIVED' | 'DELETED';
+  status: 'ACTIVE' | 'CREATED' | 'ARCHIVED' | 'DELETED';
   taskCreatedAt: Date | null;
 };
 
@@ -24,7 +24,7 @@ export const runtime = 'nodejs';
 
 const TAB_QUERY_MAP = {
   active: 'ACTIVE',
-  created: 'ACTIVE',
+  created: 'CREATED',
   archived: 'ARCHIVED',
   deleted: 'DELETED',
 } as const;
@@ -40,7 +40,8 @@ function parseStatusFromQuery(request: Request) {
   return { error: 'Invalid status query value' } as const;
 }
 
-function mapStatus(status: 'ACTIVE' | 'ARCHIVED' | 'DELETED') {
+function mapStatus(status: 'ACTIVE' | 'CREATED' | 'ARCHIVED' | 'DELETED') {
+  if (status === 'CREATED') return 'created';
   if (status === 'ARCHIVED') return 'archived';
   if (status === 'DELETED') return 'deleted';
   return 'active';
@@ -80,16 +81,7 @@ export async function GET(request: Request) {
 
     const whereClause = {
       clerkUserId: userId,
-      ...(tabFilter.prismaTab
-        ? {
-            status: TAB_QUERY_MAP[tabFilter.prismaTab],
-            ...(tabFilter.prismaTab === 'active'
-              ? { taskCreatedAt: null }
-              : tabFilter.prismaTab === 'created'
-                ? { taskCreatedAt: { not: null } }
-                : {}),
-          }
-        : {}),
+      ...(tabFilter.prismaTab ? { status: TAB_QUERY_MAP[tabFilter.prismaTab] } : {}),
     };
 
     try {
@@ -142,7 +134,7 @@ export async function GET(request: Request) {
       });
 
       return NextResponse.json({
-        notes: (tabFilter.prismaTab === 'created' ? [] : notes).map((note: LegacyVoiceNoteRow) => mapNoteResponse(note)),
+        notes: notes.map((note: LegacyVoiceNoteRow) => mapNoteResponse(note)),
       });
     }
   } catch (error) {

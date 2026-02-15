@@ -166,7 +166,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const task = await db.$transaction(async (tx) => {
+    const result = await db.$transaction(async (tx) => {
       if (sourceVoiceNoteId) {
         const sourceNote = await tx.voiceNote.findFirst({
           where: {
@@ -220,19 +220,40 @@ export async function POST(request: Request) {
           },
           data: {
             taskCreatedAt: new Date(),
+            status: 'CREATED',
           },
         });
       }
 
-      return createdTask;
+      const updatedVoiceNote = sourceVoiceNoteId
+        ? await tx.voiceNote.findFirst({
+            where: { id: sourceVoiceNoteId, clerkUserId: userId },
+            select: { id: true, status: true, taskCreatedAt: true },
+          })
+        : null;
+
+      return { createdTask, updatedVoiceNote };
     });
 
     return NextResponse.json(
       {
         task: {
-          ...task,
-          dueDate: task.dueDate ? task.dueDate.toISOString().split('T')[0] : null,
+          ...result.createdTask,
+          dueDate: result.createdTask.dueDate ? result.createdTask.dueDate.toISOString().split('T')[0] : null,
         },
+        voiceNote: result.updatedVoiceNote
+          ? {
+              id: result.updatedVoiceNote.id,
+              status: result.updatedVoiceNote.status === 'CREATED'
+                ? 'created'
+                : result.updatedVoiceNote.status === 'ARCHIVED'
+                  ? 'archived'
+                  : result.updatedVoiceNote.status === 'DELETED'
+                    ? 'deleted'
+                    : 'active',
+              taskCreatedAt: result.updatedVoiceNote.taskCreatedAt?.toISOString() || null,
+            }
+          : null,
       },
       { status: 201 },
     );

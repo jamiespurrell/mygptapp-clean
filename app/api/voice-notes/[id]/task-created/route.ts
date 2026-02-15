@@ -31,7 +31,12 @@ export async function PATCH(_request: Request, { params }: { params: Promise<{ i
       if (!existing.taskCreatedAt) {
         await db.voiceNote.updateMany({
           where: { id, clerkUserId: userId, taskCreatedAt: null },
-          data: { taskCreatedAt: new Date() },
+          data: { taskCreatedAt: new Date(), status: 'CREATED' },
+        });
+      } else {
+        await db.voiceNote.updateMany({
+          where: { id, clerkUserId: userId, status: 'ACTIVE' },
+          data: { status: 'CREATED' },
         });
       }
 

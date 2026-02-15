@@ -31,6 +31,7 @@ enum VoiceNoteType {
 
 enum VoiceNoteStatus {
   ACTIVE
+  CREATED
   ARCHIVED
   DELETED
 }
