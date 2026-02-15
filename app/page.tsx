@@ -422,7 +422,14 @@ ${source}`);
     setTaskPage(1);
     setTaskErrorMessage('');
     setIsTaskCreateModalOpen(true);
-    setNotes((prev) => prev.map((item) => (item.id === note.id ? { ...item, linkedTaskId: 'copied-to-form' } : item)));
+    const optimisticTaskCreatedAt = new Date().toISOString();
+    setNotes((prev) =>
+      prev.map((item) =>
+        item.id === note.id
+          ? { ...item, linkedTaskId: 'copied-to-form', taskCreatedAt: optimisticTaskCreatedAt }
+          : item,
+      ),
+    );
     setNoteActionMessage('Task draft copied from voice note. Confirm with Add Task to save.');
 
     try {
