@@ -9,6 +9,10 @@ function isMissingTaskCreatedAtColumnError(error: unknown) {
   return code === 'P2022' || message.includes('task_created_at') || message.includes('taskCreatedAt');
 }
 
+function toIsoString(value: Date | string) {
+  return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
+}
+
 export async function PATCH(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { userId } = await auth();
@@ -18,38 +22,34 @@ export async function PATCH(_request: Request, { params }: { params: Promise<{ i
 
     const { id } = await params;
 
-    const existing = await db.voiceNote.findFirst({
-      where: { id, clerkUserId: userId },
-      select: { id: true },
-    });
-
-    if (!existing) {
-      return NextResponse.json({ error: 'Voice note not found' }, { status: 404 });
-    }
-
     try {
-      await db.voiceNote.updateMany({
-        where: {
-          id,
-          clerkUserId: userId,
-          taskCreatedAt: null,
-        },
-        data: { taskCreatedAt: new Date() },
-      });
-
-      const note = await db.voiceNote.findFirst({
+      const existing = await db.voiceNote.findFirst({
         where: { id, clerkUserId: userId },
         select: { taskCreatedAt: true },
       });
 
-      if (!note?.taskCreatedAt) {
+      if (!existing) {
+        return NextResponse.json({ error: 'Voice note not found' }, { status: 404 });
+      }
+
+      if (existing.taskCreatedAt) {
+        return NextResponse.json({
+          note: { taskCreatedAt: toIsoString(existing.taskCreatedAt) },
+        });
+      }
+
+      const updated = await db.voiceNote.update({
+        where: { id },
+        data: { taskCreatedAt: new Date() },
+        select: { taskCreatedAt: true },
+      });
+
+      if (!updated.taskCreatedAt) {
         return NextResponse.json({ error: 'Failed to mark voice note as created' }, { status: 500 });
       }
 
       return NextResponse.json({
-        note: {
-          taskCreatedAt: note.taskCreatedAt.toISOString(),
-        },
+        note: { taskCreatedAt: toIsoString(updated.taskCreatedAt) },
       });
     } catch (error) {
       if (isMissingTaskCreatedAtColumnError(error)) {

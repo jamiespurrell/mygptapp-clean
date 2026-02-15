@@ -413,6 +413,8 @@ export default function HomePage() {
         method: 'PATCH',
       });
       const payload = (await response.json()) as { note?: { taskCreatedAt: string }; error?: string };
+      console.log('mark-created status', response.status);
+      console.log('mark-created payload', payload);
       if (!response.ok || !payload.note?.taskCreatedAt) {
         throw new Error(payload.error || 'Failed to mark voice note as created');
       }
