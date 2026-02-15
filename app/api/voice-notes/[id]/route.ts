@@ -75,6 +75,7 @@ export async function PATCH(request: Request, { params }: Params) {
         audioMimeType: true,
         durationMs: true,
         status: true,
+        taskCreatedAt: true,
       },
     });
 

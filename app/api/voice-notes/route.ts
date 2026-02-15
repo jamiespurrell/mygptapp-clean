@@ -15,21 +15,24 @@ type VoiceNoteRow = {
   audioMimeType: string | null;
   durationMs: number | null;
   status: 'ACTIVE' | 'ARCHIVED' | 'DELETED';
+  taskCreatedAt: Date | null;
 };
 
 export const runtime = 'nodejs';
 
-const STATUS_QUERY_MAP = {
+const TAB_QUERY_MAP = {
   active: 'ACTIVE',
+  created: 'ACTIVE',
   archived: 'ARCHIVED',
   deleted: 'DELETED',
 } as const;
 
 function parseStatusFromQuery(request: Request) {
-  const status = new URL(request.url).searchParams.get('status');
-  if (!status) return { prismaStatus: null } as const;
-  if (status in STATUS_QUERY_MAP) {
-    return { prismaStatus: STATUS_QUERY_MAP[status as keyof typeof STATUS_QUERY_MAP] } as const;
+  const params = new URL(request.url).searchParams;
+  const tab = params.get('tab') ?? params.get('status');
+  if (!tab) return { prismaTab: null } as const;
+  if (tab in TAB_QUERY_MAP) {
+    return { prismaTab: tab as keyof typeof TAB_QUERY_MAP } as const;
   }
 
   return { error: 'Invalid status query value' } as const;
@@ -52,16 +55,27 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const statusFilter = parseStatusFromQuery(request);
-    if ('error' in statusFilter) {
-      return NextResponse.json({ error: statusFilter.error }, { status: 400 });
+    const tabFilter = parseStatusFromQuery(request);
+    if ('error' in tabFilter) {
+      return NextResponse.json({ error: tabFilter.error }, { status: 400 });
     }
 
+    const whereClause = {
+      clerkUserId: userId,
+      ...(tabFilter.prismaTab
+        ? {
+            status: TAB_QUERY_MAP[tabFilter.prismaTab],
+            ...(tabFilter.prismaTab === 'active'
+              ? { taskCreatedAt: null }
+              : tabFilter.prismaTab === 'created'
+                ? { taskCreatedAt: { not: null } }
+                : {}),
+          }
+        : {}),
+    };
+
     const notes = await db.voiceNote.findMany({
-      where: {
-        clerkUserId: userId,
-        ...(statusFilter.prismaStatus ? { status: statusFilter.prismaStatus } : {}),
-      },
+      where: whereClause,
       orderBy: { createdAt: 'desc' },
       select: {
         id: true,
@@ -73,6 +87,7 @@ export async function GET(request: Request) {
         audioMimeType: true,
         durationMs: true,
         status: true,
+        taskCreatedAt: true,
       },
     });
 
@@ -153,6 +168,7 @@ export async function POST(request: Request) {
         audioMimeType: true,
         durationMs: true,
         status: true,
+        taskCreatedAt: true,
       },
     });
 

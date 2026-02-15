@@ -4,6 +4,7 @@ import { SignIn, SignedIn, SignedOut, useUser } from '@clerk/nextjs';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 type ItemStatus = 'active' | 'archived' | 'deleted';
+type NoteTab = 'active' | 'created' | 'archived' | 'deleted';
 
 type Task = {
   id: string;
@@ -34,6 +35,7 @@ type Note = {
   audioMimeType: string | null;
   durationMs: number | null;
   status: ItemStatus;
+  taskCreatedAt: string | null;
   linkedTaskId?: string | null;
 };
 
@@ -84,7 +86,7 @@ export default function HomePage() {
   const [noteInput, setNoteInput] = useState('');
   const [noteType, setNoteType] = useState<'TEXT' | 'AUDIO'>('TEXT');
   const [notes, setNotes] = useState<Note[]>([]);
-  const [notesTab, setNotesTab] = useState<ItemStatus>('active');
+  const [notesTab, setNotesTab] = useState<NoteTab>('active');
   const [notesPage, setNotesPage] = useState(1);
   const [notesPageSize, setNotesPageSize] = useState(5);
   const [noteFromDate, setNoteFromDate] = useState('');
@@ -188,10 +190,11 @@ export default function HomePage() {
           audioMimeType: string | null;
           durationMs: number | null;
           status: ItemStatus;
+          taskCreatedAt: string | null;
         }>
       };
 
-      setNotes(data.notes.map((note) => ({ ...note, title: note.title || 'Untitled Note', content: note.content || '', linkedTaskId: null })));
+      setNotes(data.notes.map((note) => ({ ...note, title: note.title || 'Untitled Note', content: note.content || '', taskCreatedAt: note.taskCreatedAt, linkedTaskId: null })));
     } catch (error) {
       console.error('Failed loading voice notes', error);
     }
@@ -402,23 +405,43 @@ export default function HomePage() {
     }
   }
 
-  function createTaskFromNote(note: Note) {
-    if (note.linkedTaskId) return;
+  async function createTaskFromNote(note: Note) {
+    if (note.linkedTaskId || note.taskCreatedAt) return;
 
-    const noteContext = note.content.trim() || 'No note text';
-    const source = `From ${note.noteType} captured ${new Date(note.createdAt).toLocaleString()}`;
+    try {
+      const response = await fetch(`/api/voice-notes/${note.id}/task-created`, {
+        method: 'PATCH',
+      });
+      const payload = (await response.json()) as { note?: { taskCreatedAt: string }; error?: string };
+      if (!response.ok || !payload.note?.taskCreatedAt) {
+        throw new Error(payload.error || 'Failed to mark voice note as created');
+      }
 
-    setTaskTitle(note.title.trim() || 'Follow-up task');
-    setTaskDetails(`${noteContext}\n\n${source}`);
-    setTaskDue('');
-    setTaskUrgency('2');
-    setPendingTaskSourceNoteId(note.id);
-    setNotes((prev) => prev.map((item) => (item.id === note.id ? { ...item, linkedTaskId: 'copied-to-form' } : item)));
-    setTaskTab('active');
-    setTaskPage(1);
-    setTaskErrorMessage('');
-    setIsTaskCreateModalOpen(true);
-    setNoteActionMessage('Task draft copied from voice note. Confirm with Add Task to save.');
+      const noteContext = note.content.trim() || 'No note text';
+      const source = `From ${note.noteType} captured ${new Date(note.createdAt).toLocaleString()}`;
+
+      setTaskTitle(note.title.trim() || 'Follow-up task');
+      setTaskDetails(`${noteContext}
+
+${source}`);
+      setTaskDue('');
+      setTaskUrgency('2');
+      setPendingTaskSourceNoteId(note.id);
+      setNotes((prev) =>
+        prev.map((item) =>
+          item.id === note.id
+            ? { ...item, linkedTaskId: 'copied-to-form', taskCreatedAt: payload.note?.taskCreatedAt || item.taskCreatedAt }
+            : item,
+        ),
+      );
+      setTaskTab('active');
+      setTaskPage(1);
+      setTaskErrorMessage('');
+      setIsTaskCreateModalOpen(true);
+      setNoteActionMessage('Task draft copied from voice note. Confirm with Add Task to save.');
+    } catch (error) {
+      console.error('Failed preparing task from voice note', error);
+    }
   }
 
   function closeTaskCreateModal() {
@@ -651,7 +674,8 @@ export default function HomePage() {
 
   const noteCounts = useMemo(
     () => ({
-      active: notes.filter((note) => note.status === 'active').length,
+      active: notes.filter((note) => note.status === 'active' && !note.taskCreatedAt).length,
+      created: notes.filter((note) => note.status === 'active' && Boolean(note.taskCreatedAt)).length,
       archived: notes.filter((note) => note.status === 'archived').length,
       deleted: notes.filter((note) => note.status === 'deleted').length,
     }),
@@ -670,11 +694,15 @@ export default function HomePage() {
 
   const filteredNotes = useMemo(
     () =>
-      notes.filter(
-        (note) =>
-          note.status === notesTab &&
-          inDateRange(note.createdAt, noteFromDate, noteToDate),
-      ),
+      notes.filter((note) => {
+        const matchesTab = notesTab === 'created'
+          ? note.status === 'active' && Boolean(note.taskCreatedAt)
+          : notesTab === 'active'
+            ? note.status === 'active' && !note.taskCreatedAt
+            : note.status === notesTab;
+
+        return matchesTab && inDateRange(note.createdAt, noteFromDate, noteToDate);
+      }),
     [notes, notesTab, noteFromDate, noteToDate],
   );
 
@@ -766,6 +794,7 @@ export default function HomePage() {
 
             <div className="tab-row">
               <button className={`tab-btn ${notesTab === 'active' ? 'active' : ''}`} onClick={() => setNotesTab('active')}>Voice Notes ({noteCounts.active})</button>
+              <button className={`tab-btn ${notesTab === 'created' ? 'active' : ''}`} onClick={() => setNotesTab('created')}>Created ({noteCounts.created})</button>
               <button className={`tab-btn ${notesTab === 'archived' ? 'active' : ''}`} onClick={() => setNotesTab('archived')}>Archived ({noteCounts.archived})</button>
               <button className={`tab-btn ${notesTab === 'deleted' ? 'active' : ''}`} onClick={() => setNotesTab('deleted')}>Deleted ({noteCounts.deleted})</button>
             </div>
@@ -793,13 +822,13 @@ export default function HomePage() {
                       note.audioUrl ? <audio controls src={note.audioUrl} /> : <small className="status">Audio unavailable</small>
                     ) : null}
                     <div className="item-actions note-actions">
-                      {notesTab === 'active' && (
+                      {(notesTab === 'active' || notesTab === 'created') && (
                         <button
                           className="mini-btn mini-primary"
                           onClick={() => createTaskFromNote(note)}
-                          disabled={Boolean(note.linkedTaskId)}
+                          disabled={Boolean(note.linkedTaskId || note.taskCreatedAt)}
                         >
-                          {note.linkedTaskId ? 'Copied to Form' : 'Create Task'}
+                          {note.linkedTaskId || note.taskCreatedAt ? 'Copied to Form' : 'Create Task'}
                         </button>
                       )}
                       <div className="task-menu-wrap">
