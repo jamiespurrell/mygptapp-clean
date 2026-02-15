@@ -18,6 +18,8 @@ type VoiceNoteRow = {
   taskCreatedAt: Date | null;
 };
 
+type LegacyVoiceNoteRow = Omit<VoiceNoteRow, 'taskCreatedAt'>;
+
 export const runtime = 'nodejs';
 
 const TAB_QUERY_MAP = {
@@ -48,6 +50,22 @@ function mapType(type: 'TEXT' | 'AUDIO') {
   return type === 'AUDIO' ? 'Voice note' : 'Text note (no recording required)';
 }
 
+function mapNoteResponse(note: VoiceNoteRow | LegacyVoiceNoteRow) {
+  return {
+    ...note,
+    taskCreatedAt: 'taskCreatedAt' in note ? note.taskCreatedAt : null,
+    noteType: mapType(note.type),
+    status: mapStatus(note.status),
+  };
+}
+
+function isMissingTaskCreatedAtColumnError(error: unknown) {
+  if (!error || typeof error !== 'object') return false;
+  const code = 'code' in error ? String((error as { code?: unknown }).code || '') : '';
+  const message = 'message' in error ? String((error as { message?: unknown }).message || '') : '';
+  return code === 'P2022' || message.includes('task_created_at') || message.includes('taskCreatedAt');
+}
+
 export async function GET(request: Request) {
   try {
     const { userId } = await auth();
@@ -74,30 +92,59 @@ export async function GET(request: Request) {
         : {}),
     };
 
-    const notes = await db.voiceNote.findMany({
-      where: whereClause,
-      orderBy: { createdAt: 'desc' },
-      select: {
-        id: true,
-        title: true,
-        content: true,
-        createdAt: true,
-        type: true,
-        audioUrl: true,
-        audioMimeType: true,
-        durationMs: true,
-        status: true,
-        taskCreatedAt: true,
-      },
-    });
+    try {
+      const notes = await db.voiceNote.findMany({
+        where: whereClause,
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          title: true,
+          content: true,
+          createdAt: true,
+          type: true,
+          audioUrl: true,
+          audioMimeType: true,
+          durationMs: true,
+          status: true,
+          taskCreatedAt: true,
+        },
+      });
 
-    return NextResponse.json({
-      notes: notes.map((note: VoiceNoteRow) => ({
-        ...note,
-        noteType: mapType(note.type),
-        status: mapStatus(note.status),
-      })),
-    });
+      return NextResponse.json({
+        notes: notes.map((note: VoiceNoteRow) => mapNoteResponse(note)),
+      });
+    } catch (error) {
+      if (!isMissingTaskCreatedAtColumnError(error)) {
+        throw error;
+      }
+
+      console.error('GET /api/voice-notes missing task_created_at column; using legacy fallback', error);
+
+      const legacyWhere = {
+        clerkUserId: userId,
+        ...(tabFilter.prismaTab ? { status: TAB_QUERY_MAP[tabFilter.prismaTab] } : {}),
+      };
+
+      const notes = await db.voiceNote.findMany({
+        where: legacyWhere,
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          title: true,
+          content: true,
+          createdAt: true,
+          type: true,
+          audioUrl: true,
+          audioMimeType: true,
+          durationMs: true,
+          status: true,
+        },
+      });
+
+      return NextResponse.json({
+        notes: (tabFilter.prismaTab === 'created' ? [] : notes).map((note: LegacyVoiceNoteRow) => mapNoteResponse(note)),
+      });
+    }
   } catch (error) {
     console.error('GET /api/voice-notes failed', error);
     return NextResponse.json({ error: 'Failed to fetch voice notes' }, { status: 500 });
@@ -148,42 +195,67 @@ export async function POST(request: Request) {
       ? Number.parseInt(durationInput, 10)
       : null;
 
-    const note = await db.voiceNote.create({
-      data: {
-        clerkUserId: userId,
-        type,
-        title: title || 'Untitled Note',
-        content: content || null,
-        audioUrl,
-        audioMimeType,
-        durationMs: Number.isFinite(durationMs) ? durationMs : null,
-      },
-      select: {
-        id: true,
-        title: true,
-        content: true,
-        createdAt: true,
-        type: true,
-        audioUrl: true,
-        audioMimeType: true,
-        durationMs: true,
-        status: true,
-        taskCreatedAt: true,
-      },
-    });
-
-    return NextResponse.json(
-      {
-        note: {
-          ...note,
-          noteType: mapType(note.type),
-          status: mapStatus(note.status),
+    try {
+      const note = await db.voiceNote.create({
+        data: {
+          clerkUserId: userId,
+          type,
+          title: title || 'Untitled Note',
+          content: content || null,
+          audioUrl,
+          audioMimeType,
+          durationMs: Number.isFinite(durationMs) ? durationMs : null,
         },
-      },
-      { status: 201 },
-    );
+        select: {
+          id: true,
+          title: true,
+          content: true,
+          createdAt: true,
+          type: true,
+          audioUrl: true,
+          audioMimeType: true,
+          durationMs: true,
+          status: true,
+          taskCreatedAt: true,
+        },
+      });
+
+      return NextResponse.json({ note: mapNoteResponse(note) }, { status: 201 });
+    } catch (error) {
+      if (!isMissingTaskCreatedAtColumnError(error)) {
+        throw error;
+      }
+
+      console.error('POST /api/voice-notes missing task_created_at column; using legacy fallback', error);
+
+      const legacyNote = await db.voiceNote.create({
+        data: {
+          clerkUserId: userId,
+          type,
+          title: title || 'Untitled Note',
+          content: content || null,
+          audioUrl,
+          audioMimeType,
+          durationMs: Number.isFinite(durationMs) ? durationMs : null,
+        },
+        select: {
+          id: true,
+          title: true,
+          content: true,
+          createdAt: true,
+          type: true,
+          audioUrl: true,
+          audioMimeType: true,
+          durationMs: true,
+          status: true,
+        },
+      });
+
+      return NextResponse.json({ note: mapNoteResponse(legacyNote) }, { status: 201 });
+    }
   } catch (error) {
     console.error('POST /api/voice-notes failed', error);
-    return NextResponse.json({ error: 'Failed to save voice note' }, { status: 500 });
+    const message = error instanceof Error ? error.message : 'Failed to save voice note';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
