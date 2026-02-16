@@ -23,6 +23,8 @@ type Task = {
     audioUrl: string | null;
   } | null;
   deletedAt: string | null;
+  isPinned: boolean;
+  pinnedAt: string | null;
 };
 
 type Note = {
@@ -142,6 +144,8 @@ export default function HomePage() {
             audioUrl: string | null;
           } | null;
           deletedAt: string | null;
+          isPinned: boolean;
+          pinnedAt: string | null;
           createdAt: string;
         }>;
       };
@@ -160,6 +164,8 @@ export default function HomePage() {
             sourceVoiceNoteId: task.sourceVoiceNoteId,
             sourceVoiceNote: task.sourceVoiceNote,
             deletedAt: task.deletedAt,
+            isPinned: task.isPinned,
+            pinnedAt: task.pinnedAt,
           }))
           .sort((a, b) => b.score - a.score),
       );
@@ -606,6 +612,67 @@ ${source}`);
     window.open(googleCalendarUrl, '_blank', 'noopener,noreferrer');
   }
 
+
+  async function updateTaskPin(id: string, isPinned: boolean) {
+    setTasks((prev) =>
+      prev.map((task) =>
+        task.id === id
+          ? {
+              ...task,
+              isPinned,
+              pinnedAt: isPinned ? new Date().toISOString() : null,
+            }
+          : task,
+      ),
+    );
+
+    try {
+      const response = await fetch(`/api/tasks/${id}/pin`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isPinned }),
+      });
+
+      const payload = (await response.json()) as {
+        task?: {
+          id: string;
+          isPinned: boolean;
+          pinnedAt: string | null;
+        };
+        error?: string;
+      };
+
+      if (!response.ok || !payload.task) {
+        throw new Error(payload.error || 'Failed updating task pin');
+      }
+
+      setTasks((prev) =>
+        prev.map((task) =>
+          task.id === id
+            ? {
+                ...task,
+                isPinned: payload.task?.isPinned ?? task.isPinned,
+                pinnedAt: payload.task?.pinnedAt ?? task.pinnedAt,
+              }
+            : task,
+        ),
+      );
+    } catch (error) {
+      console.error('Failed updating task pin', error);
+      setTasks((prev) =>
+        prev.map((task) =>
+          task.id === id
+            ? {
+                ...task,
+                isPinned: !isPinned,
+                pinnedAt: !isPinned ? new Date().toISOString() : null,
+              }
+            : task,
+        ),
+      );
+    }
+  }
+
   async function updateTaskStatus(id: string, status: ItemStatus) {
     try {
       const response = await fetch(`/api/tasks/${id}/status`, {
@@ -680,13 +747,31 @@ ${source}`);
   );
 
   const filteredTasks = useMemo(
+    () => tasks.filter((task) => task.status === taskTab),
+    [tasks, taskTab],
+  );
+
+  const pinnedTasks = useMemo(
     () =>
-      tasks.filter(
-        (task) =>
-          task.status === taskTab &&
-          inDateRange(task.dueDate || task.createdAt, taskFromDate, taskToDate),
-      ),
-    [tasks, taskTab, taskFromDate, taskToDate],
+      filteredTasks
+        .filter((task) => task.isPinned)
+        .sort((a, b) => {
+          const pinnedAtA = a.pinnedAt ? new Date(a.pinnedAt).getTime() : 0;
+          const pinnedAtB = b.pinnedAt ? new Date(b.pinnedAt).getTime() : 0;
+          if (pinnedAtB !== pinnedAtA) {
+            return pinnedAtB - pinnedAtA;
+          }
+          return b.score - a.score;
+        }),
+    [filteredTasks],
+  );
+
+  const filteredNonPinnedTasks = useMemo(
+    () =>
+      filteredTasks
+        .filter((task) => !task.isPinned)
+        .filter((task) => inDateRange(task.dueDate || task.createdAt, taskFromDate, taskToDate)),
+    [filteredTasks, taskFromDate, taskToDate],
   );
 
   const filteredNotes = useMemo(
@@ -699,10 +784,11 @@ ${source}`);
     [notes, notesTab, noteFromDate, noteToDate],
   );
 
-  const taskTotalPages = Math.max(1, Math.ceil(filteredTasks.length / taskPageSize));
+  const taskTotalPages = Math.max(1, Math.ceil(filteredNonPinnedTasks.length / taskPageSize));
   const noteTotalPages = Math.max(1, Math.ceil(filteredNotes.length / notesPageSize));
 
-  const pagedTasks = filteredTasks.slice((taskPage - 1) * taskPageSize, taskPage * taskPageSize);
+  const pagedNonPinnedTasks = filteredNonPinnedTasks.slice((taskPage - 1) * taskPageSize, taskPage * taskPageSize);
+  const pagedTasks = [...pinnedTasks, ...pagedNonPinnedTasks];
   const pagedNotes = filteredNotes.slice((notesPage - 1) * notesPageSize, notesPage * notesPageSize);
 
   return (
@@ -973,6 +1059,9 @@ ${source}`);
                                   Archive
                                 </button>
                               )}
+                              <button className="task-dropdown-item" onClick={() => { updateTaskPin(task.id, !task.isPinned); setTaskMenuOpenId(null); }}>
+                                {task.isPinned ? 'Unpin task' : 'Pin task'}
+                              </button>
                               <button className="task-dropdown-item" onClick={() => { addTaskToCalendar(task); setTaskMenuOpenId(null); }}>
                                 Add to Calendar
                               </button>
@@ -987,6 +1076,7 @@ ${source}`);
                       </div>
                       <div>
                         <strong>{task.title}</strong>
+                        {task.isPinned ? <span className="task-pin-label" aria-label="Pinned task">📌 Pinned</span> : null}
                         <br />
                         <small>{task.details || 'No details'} • Due: {task.dueDate || 'No date'}</small>
                         {task.sourceVoiceNote?.audioUrl ? <audio controls src={task.sourceVoiceNote.audioUrl} /> : null}

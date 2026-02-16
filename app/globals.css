@@ -123,6 +123,7 @@ html.dark .priority-low { background: #234747; color: #c8ffea; }
 .task-card strong, .task-card small { display: block; overflow-wrap: anywhere; }
 .task-card small { color: var(--muted); line-height: 1.35; }
 .task-card audio { margin-top: 0.5rem; }
+.task-pin-label { display: inline-flex; align-items: center; gap: 0.25rem; margin-top: 0.35rem; font-size: 0.74rem; font-weight: 700; color: var(--primary); }
 
 @media (max-width: 1024px) {
   .layout { grid-template-columns: 1fr; }

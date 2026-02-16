@@ -114,6 +114,8 @@ model Task {
   timezone      String?
   sortOrder     Int          @default(0) @map("sort_order")
   deletedAt     DateTime?    @map("deleted_at")
+  isPinned      Boolean      @default(false) @map("is_pinned")
+  pinnedAt      DateTime?    @map("pinned_at")
 
   createdAt     DateTime     @default(now()) @map("created_at")
   updatedAt     DateTime     @updatedAt @map("updated_at")
@@ -126,6 +128,7 @@ model Task {
   @@index([workspaceId])
   @@index([createdById])
   @@index([status, deletedAt])
+  @@index([workspaceId, status, isPinned, pinnedAt])
   @@unique([workspaceId, sourceVoiceNoteId])
   @@map("tasks")
 }

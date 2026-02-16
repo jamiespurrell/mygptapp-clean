@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '../../../../../lib/db';
-import { getUserWorkspaceContext, mapUiStatusToPrisma } from '../../_shared';
+import { getUserWorkspaceContext } from '../../_shared';
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -12,10 +12,10 @@ export async function PATCH(request: Request, { params }: Params) {
     }
 
     const { id } = await params;
-    const body = (await request.json()) as { status?: 'active' | 'archived' | 'deleted' };
+    const body = (await request.json()) as { isPinned?: unknown };
 
-    if (!body.status || !['active', 'archived', 'deleted'].includes(body.status)) {
-      return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
+    if (typeof body.isPinned !== 'boolean') {
+      return NextResponse.json({ error: 'isPinned must be a boolean' }, { status: 400 });
     }
 
     const existingTask = await db.task.findFirst({
@@ -23,27 +23,18 @@ export async function PATCH(request: Request, { params }: Params) {
         id,
         workspaceId: context.workspace.id,
       },
-      select: {
-        id: true,
-        status: true,
-      },
+      select: { id: true },
     });
 
     if (!existingTask) {
       return NextResponse.json({ error: 'Task not found' }, { status: 404 });
     }
 
-    const nextStatus = mapUiStatusToPrisma(body.status);
     const task = await db.task.update({
       where: { id },
       data: {
-        status: nextStatus,
-        deletedAt:
-          nextStatus === 'DELETED'
-            ? existingTask.status === 'DELETED'
-              ? undefined
-              : new Date()
-            : null,
+        isPinned: body.isPinned,
+        pinnedAt: body.isPinned ? new Date() : null,
       },
       select: {
         id: true,
@@ -52,6 +43,14 @@ export async function PATCH(request: Request, { params }: Params) {
         dueDate: true,
         priority: true,
         status: true,
+        sourceVoiceNoteId: true,
+        sourceVoiceNote: {
+          select: {
+            id: true,
+            type: true,
+            audioUrl: true,
+          },
+        },
         deletedAt: true,
         isPinned: true,
         pinnedAt: true,
@@ -66,7 +65,7 @@ export async function PATCH(request: Request, { params }: Params) {
       },
     });
   } catch (error) {
-    console.error('PATCH /api/tasks/:id/status failed', error);
-    return NextResponse.json({ error: 'Failed to update task status' }, { status: 500 });
+    console.error('PATCH /api/tasks/:id/pin failed', error);
+    return NextResponse.json({ error: 'Failed to update task pin status' }, { status: 500 });
   }
 }

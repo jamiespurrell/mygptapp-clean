@@ -109,6 +109,8 @@ export async function PATCH(request: Request, { params }: Params) {
           },
         },
         deletedAt: true,
+        isPinned: true,
+        pinnedAt: true,
         createdAt: true,
       },
     });

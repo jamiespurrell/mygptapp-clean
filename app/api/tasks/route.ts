@@ -62,7 +62,11 @@ export async function GET(request: Request) {
         workspaceId: context.workspace.id,
         ...(statusFilter.prismaStatus ? { status: statusFilter.prismaStatus } : {}),
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: [
+        { isPinned: 'desc' },
+        { pinnedAt: 'desc' },
+        { createdAt: 'desc' },
+      ],
       select: {
         id: true,
         title: true,
@@ -79,6 +83,8 @@ export async function GET(request: Request) {
           },
         },
         deletedAt: true,
+        isPinned: true,
+        pinnedAt: true,
         createdAt: true,
       },
     });
@@ -207,6 +213,8 @@ export async function POST(request: Request) {
             },
           },
           deletedAt: true,
+          isPinned: true,
+          pinnedAt: true,
           createdAt: true,
         },
       });
